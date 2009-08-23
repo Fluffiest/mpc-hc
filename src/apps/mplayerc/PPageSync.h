@@ -1,7 +1,4 @@
 /*
- * $Id$
- *
- * (C) 2003-2006 Gabest
  * (C) 2006-2007 see AUTHORS
  *
  * This file is part of mplayerc.
@@ -23,38 +20,38 @@
 
 #pragma once
 
-#include "afxwin.h"
+#include "PPageBase.h"
+#include "StaticLink.h"
 
-
-// CGoToDlg dialog
-
-class CGoToDlg : public CDialog
+class CPPageSync: public CPPageBase
 {
-	DECLARE_DYNAMIC(CGoToDlg)
+	DECLARE_DYNAMIC(CPPageSync)
 
 public:
-	CGoToDlg(int time = -1, float fps = 0, CWnd* pParent = NULL);   // standard constructor
-	virtual ~CGoToDlg();
+	CPPageSync();
+	virtual ~CPPageSync();
 
-	CString m_timestr;
-	CString m_framestr;
-	CEdit m_timeedit;
-	CEdit m_frameedit;
+	enum {IDD = IDD_PPAGESYNC};
+	BOOL m_bSynchronizeVideo;
+	BOOL m_bSynchronizeDisplay;
+	BOOL m_bSynchronizeNearest;
 
-	int m_time;
-	double m_dFrameRate;
+	int m_iLineDelta;
+	int m_iColumnDelta;
+	double m_fCycleDelta;
 
-// Dialog Data
-	enum { IDD = IDD_GOTO_DLG };
+	double m_fTargetSyncOffset;
+	double m_fControlLimit;
 
 protected:
-	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
+	virtual void DoDataExchange(CDataExchange* pDX);
 	virtual BOOL OnInitDialog();
-	virtual BOOL PreTranslateMessage(MSG* pMsg);
+	virtual BOOL OnApply();
 
 	DECLARE_MESSAGE_MAP()
 
 public:
-	afx_msg void OnBnClickedOk1();
-	afx_msg void OnBnClickedOk2();
+	afx_msg void OnBnClickedSyncVideo();
+	afx_msg void OnBnClickedSyncDisplay();
+	afx_msg void OnBnClickedSyncNearest();
 };

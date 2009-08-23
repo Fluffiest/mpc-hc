@@ -68,7 +68,6 @@
 #include "FGManager.h"
 
 #include "textpassthrufilter.h"
-#include "..\..\filters\filters.h"
 #include "..\..\filters\PinInfoWnd.h"
 
 #include "DX7AllocatorPresenter.h"
@@ -315,6 +314,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_VIEW_TEARING_TEST, OnViewTearingTest)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_DISPLAYSTATS, OnUpdateViewDisplayStats)
 	ON_COMMAND(ID_VIEW_DISPLAYSTATS, OnViewDisplayStats)
+	ON_COMMAND(ID_VIEW_RESETSTATS, OnViewResetStats)
 	ON_COMMAND(ID_VIEW_DISPLAYSTATS_SC, OnViewDisplayStatsSC)	
 	ON_UPDATE_COMMAND_UI(ID_VIEW_FULLSCREENGUISUPPORT, OnUpdateViewFullscreenGUISupport)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_HIGHCOLORRESOLUTION, OnUpdateViewHighColorResolution)
@@ -322,6 +322,10 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_VSYNC, OnUpdateViewVSync)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_VSYNCOFFSET, OnUpdateViewVSyncOffset)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_VSYNCACCURATE, OnUpdateViewVSyncAccurate)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_SYNCHRONIZEVIDEO, OnUpdateViewSynchronizeVideo)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_SYNCHRONIZEDISPLAY, OnUpdateViewSynchronizeDisplay)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_SYNCHRONIZENEAREST, OnUpdateViewSynchronizeNearest)
+
 	ON_UPDATE_COMMAND_UI(ID_VIEW_EVROUTPUTRANGE_0_255, OnUpdateViewEVROutputRange)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_EVROUTPUTRANGE_16_235, OnUpdateViewEVROutputRange)
 
@@ -333,7 +337,6 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_DISABLEDESKTOPCOMPOSITION, OnUpdateViewDisableDesktopComposition)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_ALTERNATIVEVSYNC, OnUpdateViewAlternativeVSync)
 
-
 	ON_UPDATE_COMMAND_UI(ID_VIEW_VSYNCOFFSET_INCREASE, OnUpdateViewVSyncOffsetIncrease)
 	ON_UPDATE_COMMAND_UI(ID_VIEW_VSYNCOFFSET_DECREASE, OnUpdateViewVSyncOffsetDecrease)
 	ON_COMMAND(ID_VIEW_FULLSCREENGUISUPPORT, OnViewFullscreenGUISupport)
@@ -341,6 +344,9 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_VIEW_ENABLEFRAMETIMECORRECTION, OnViewEnableFrameTimeCorrection)
 	ON_COMMAND(ID_VIEW_VSYNC, OnViewVSync)
 	ON_COMMAND(ID_VIEW_VSYNCACCURATE, OnViewVSyncAccurate)
+	ON_COMMAND(ID_VIEW_SYNCHRONIZEVIDEO, OnViewSynchronizeVideo)
+	ON_COMMAND(ID_VIEW_SYNCHRONIZEDISPLAY, OnViewSynchronizeDisplay)
+	ON_COMMAND(ID_VIEW_SYNCHRONIZENEAREST, OnViewSynchronizeNearest)
 
 	ON_COMMAND(ID_VIEW_EVROUTPUTRANGE_0_255, OnViewEVROutputRange_0_255)
 	ON_COMMAND(ID_VIEW_EVROUTPUTRANGE_16_235, OnViewEVROutputRange_16_235)
@@ -4910,6 +4916,11 @@ void CMainFrame::OnViewDisplayStats()
 	AfxGetMyApp()->m_fDisplayStats = ! AfxGetMyApp()->m_fDisplayStats;
 }
 
+void CMainFrame::OnViewResetStats()
+{
+	AfxGetMyApp()->m_fResetStats = true; // Reset by "consumer"
+}
+
 void CMainFrame::OnViewDisplayStatsSC()
 {
 	++AfxGetMyApp()->m_fDisplayStats;
@@ -4944,6 +4955,33 @@ void CMainFrame::OnUpdateViewVSyncAccurate(CCmdUI* pCmdUI)
 
 	pCmdUI->Enable (supported);
 	pCmdUI->SetCheck(s.m_RenderSettings.iVMR9VSyncAccurate);
+}
+
+void CMainFrame::OnUpdateViewSynchronizeVideo(CCmdUI* pCmdUI)
+{
+	AppSettings& s = AfxGetAppSettings();
+	bool supported = ((s.iDSVideoRendererType == VIDRNDT_DS_EVR_CUSTOM || s.iDSVideoRendererType == VIDRNDT_DS_VMR9RENDERLESS) && m_iPlaybackMode == PM_NONE);
+
+	pCmdUI->Enable(supported);
+	pCmdUI->SetCheck(s.m_RenderSettings.bSynchronizeVideo);
+}
+
+void CMainFrame::OnUpdateViewSynchronizeDisplay(CCmdUI* pCmdUI)
+{
+	AppSettings& s = AfxGetAppSettings();
+	bool supported = ((s.iDSVideoRendererType == VIDRNDT_DS_EVR_CUSTOM || s.iDSVideoRendererType == VIDRNDT_DS_VMR9RENDERLESS) && m_iPlaybackMode == PM_NONE);
+
+	pCmdUI->Enable(supported);
+	pCmdUI->SetCheck(s.m_RenderSettings.bSynchronizeDisplay);
+}
+
+void CMainFrame::OnUpdateViewSynchronizeNearest(CCmdUI* pCmdUI)
+{
+	AppSettings& s = AfxGetAppSettings();
+	bool supported = (s.iDSVideoRendererType == VIDRNDT_DS_EVR_CUSTOM);
+
+	pCmdUI->Enable(supported);
+	pCmdUI->SetCheck(s.m_RenderSettings.bSynchronizeNearest);
 }
 
 void CMainFrame::OnUpdateViewEVROutputRange(CCmdUI* pCmdUI)
@@ -5064,6 +5102,63 @@ void CMainFrame::OnViewVSyncAccurate()
 	s.UpdateData(true);
 	CString Format;
 	Format.Format(L"Accurate VSync: %s", s.m_RenderSettings.iVMR9VSyncAccurate? L"On":L"Off");
+	m_OSD.DisplayMessage (OSD_TOPRIGHT, Format);
+}
+
+void CMainFrame::OnViewSynchronizeVideo()
+{
+	AppSettings& s = AfxGetAppSettings();
+	s.m_RenderSettings.bSynchronizeVideo = !s.m_RenderSettings.bSynchronizeVideo;
+	if (s.m_RenderSettings.bSynchronizeVideo)
+	{
+		s.m_RenderSettings.bSynchronizeDisplay = false;
+		s.m_RenderSettings.bSynchronizeNearest = false;
+		s.m_RenderSettings.iVMR9VSync = false;
+		s.m_RenderSettings.iVMR9VSyncAccurate = false;
+		s.m_RenderSettings.fVMR9AlterativeVSync = false;
+	}
+
+	s.UpdateData(true);
+	CString Format;
+	Format.Format(L"Synchronize Video to Display: %s", s.m_RenderSettings.bSynchronizeVideo? L"On":L"Off");
+	m_OSD.DisplayMessage (OSD_TOPRIGHT, Format);
+}
+
+void CMainFrame::OnViewSynchronizeDisplay()
+{
+	AppSettings& s = AfxGetAppSettings();
+	s.m_RenderSettings.bSynchronizeDisplay = !s.m_RenderSettings.bSynchronizeDisplay;
+	if (s.m_RenderSettings.bSynchronizeDisplay)
+	{
+		s.m_RenderSettings.bSynchronizeVideo = false;
+		s.m_RenderSettings.bSynchronizeNearest = false;
+		s.m_RenderSettings.iVMR9VSync = false;
+		s.m_RenderSettings.iVMR9VSyncAccurate = false;
+		s.m_RenderSettings.fVMR9AlterativeVSync = false;
+	}
+
+	s.UpdateData(true);
+	CString Format;
+	Format.Format(L"Synchronize Display to Video: %s", s.m_RenderSettings.bSynchronizeDisplay? L"On":L"Off");
+	m_OSD.DisplayMessage (OSD_TOPRIGHT, Format);
+}
+
+void CMainFrame::OnViewSynchronizeNearest()
+{
+	AppSettings& s = AfxGetAppSettings();
+	s.m_RenderSettings.bSynchronizeNearest = !s.m_RenderSettings.bSynchronizeNearest;
+	if (s.m_RenderSettings.bSynchronizeNearest)
+	{
+		s.m_RenderSettings.bSynchronizeVideo = false;
+		s.m_RenderSettings.bSynchronizeDisplay = false;
+		s.m_RenderSettings.iVMR9VSync = false;
+		s.m_RenderSettings.iVMR9VSyncAccurate = false;
+		s.m_RenderSettings.fVMR9AlterativeVSync = false;
+	}
+
+	s.UpdateData(true);
+	CString Format;
+	Format.Format(L"Present at Nearest VSync: %s", s.m_RenderSettings.bSynchronizeNearest? L"On":L"Off");
 	m_OSD.DisplayMessage (OSD_TOPRIGHT, Format);
 }
 
@@ -8854,6 +8949,26 @@ void CMainFrame::OpenCustomizeGraph()
 			AddTextPassThruFilter();
 	}
 
+	AppSettings& s = AfxGetAppSettings();
+	if (s.m_RenderSettings.bSynchronizeVideo)
+	{
+		HRESULT hr;
+		m_pRefClock = DNew CSyncClockFilter(NULL, &hr);
+		CStringW name;
+		name.Format(L"SyncClock Filter");
+		pGB->AddFilter(m_pRefClock, name);
+
+		CComPtr<IReferenceClock> refClock;
+		m_pRefClock->QueryInterface(IID_IReferenceClock, reinterpret_cast<void**>(&refClock));
+		CComPtr<IMediaFilter> mediaFilter;
+		pGB->QueryInterface(IID_IMediaFilter, reinterpret_cast<void**>(&mediaFilter));
+		mediaFilter->SetSyncSource(refClock);
+		mediaFilter = NULL;
+		refClock = NULL;
+
+		m_pRefClock->QueryInterface(IID_ISyncClock, reinterpret_cast<void**>(&m_pSyncClock));
+	}
+
 	if(m_iPlaybackMode == PM_DVD)
 	{
 		BeginEnumFilters(pGB, pEF, pBF)
@@ -9523,6 +9638,9 @@ void CMainFrame::CloseMediaPrivate()
 	pMC.Release(); pME.Release(); pMS.Release();
 	pVW.Release(); pBV.Release();
 	pBA.Release();
+	
+	m_pRefClock = NULL;
+	m_pSyncClock = NULL;
 
 	if(pGB)
 	{

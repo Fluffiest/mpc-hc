@@ -390,11 +390,17 @@ public:
 	CString GetIniPath();
 	bool IsIniValid();
 
+	// Complete this in case we need a log file function later.
+	CStdioFile logFile;
+	CString logFileName;
+	void WriteLogFile(LPCTSTR strToWrite);
+
 	bool GetAppSavePath(CString& path);
 
 	// === CASIMIR666 : Ajout CMPlayerCApp
 	bool		m_fTearingTest;
 	int			m_fDisplayStats;
+	int			m_fResetStats; // Set to reset the presentation statistics
 	LONGLONG	m_PerfFrequency;
 	CString		m_strVersion;
 	CString		m_strD3DX9Version;
@@ -493,27 +499,54 @@ public:
 			int iVMRFlushGPUAfterPresent;
 			int iVMRFlushGPUWait;
 
+			//Genlock settings
+			int bSynchronizeVideo;
+			int bSynchronizeDisplay;
+			int bSynchronizeNearest;
+			int iLineDelta;
+			int iColumnDelta;
+			double fCycleDelta;
+			double fTargetSyncOffset;
+			double fControlLimit;
 			void SetDefault()
 			{
 				fVMR9AlterativeVSync = 0;
 				iVMR9VSyncOffset = 0;
-				iVMR9VSyncAccurate = 1;
+				iVMR9VSyncAccurate = 0;
 				iVMR9FullscreenGUISupport = 0;
-				iVMR9VSync = 1;
+				iVMR9VSync = 0;
 				iVMRDisableDesktopComposition = 0;
-				iVMRFlushGPUBeforeVSync = 1;
-				iVMRFlushGPUAfterPresent = 1;
+				iVMRFlushGPUBeforeVSync = 0;
+				iVMRFlushGPUAfterPresent = 0;
 				iVMRFlushGPUWait = 0;
+				bSynchronizeVideo = 0;
+				bSynchronizeDisplay = 0;
+				bSynchronizeNearest = 0;
+				iLineDelta = 0;
+				iColumnDelta = 0;
+				fCycleDelta = 0.0012;
+				fTargetSyncOffset = 10.0;
+				fControlLimit = 2.0;
 			}
-			void SetOptimal()
+			void SetOptimal() // The same as default for the time being. Hard to define "optimal". -Arto
 			{
-				fVMR9AlterativeVSync = 1;
-				iVMR9VSyncAccurate = 1;
-				iVMR9VSync = 1;
-				iVMRDisableDesktopComposition = 1;
-				iVMRFlushGPUBeforeVSync = 1;
-				iVMRFlushGPUAfterPresent = 1;
+				fVMR9AlterativeVSync = 0;
+				iVMR9VSyncOffset = 0;
+				iVMR9VSyncAccurate = 0;
+				iVMR9FullscreenGUISupport = 0;
+				iVMR9VSync = 0;
+				iVMRDisableDesktopComposition = 0;
+				iVMRFlushGPUBeforeVSync = 0;
+				iVMRFlushGPUAfterPresent = 0;
 				iVMRFlushGPUWait = 0;
+				bSynchronizeVideo = 0;
+				bSynchronizeDisplay = 0;
+				bSynchronizeNearest = 0;
+				iLineDelta = 0;
+				iColumnDelta = 0;
+				fCycleDelta = 0.0012;
+				fTargetSyncOffset = 10.0;
+				fControlLimit = 2.0;
 			}
 		};
 		class CRendererSettingsEVR : public CRendererSettingsShared

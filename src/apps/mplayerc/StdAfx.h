@@ -73,6 +73,7 @@
 
 #include "..\..\ui\ui.h"
 #include "..\..\DSUtil\DSUtil.h"
+#include "..\..\filters\misc\SyncClock\Interfaces.h"
 
 template <class T = CString, class S = CString>
 class CAtlStringMap : public CAtlMap<S, T, CStringElementTraits<S> > {};

@@ -54,9 +54,12 @@
 				AdditionalOptions="/MP"
 				AdditionalIncludeDirectories="..\..\..\include;..\..\..\include\dx;..\..\..\include\atl;..\..\filters\BaseClasses;..\..\zlib"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;DETOURS_X32"
+				ExceptionHandling="1"
+				EnableEnhancedInstructionSet="0"
 				UsePrecompiledHeader="2"
 				PrecompiledHeaderThrough="stdafx.h"
 				PrecompiledHeaderFile="$(OutDir)\$(ProjectName).pch"
+				CallingConvention="0"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -73,8 +76,8 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/MACHINE:I386"
-				AdditionalDependencies="comsuppw.lib Delayimp.lib psapi.lib detours.lib qtmlClient.lib wmstub.lib dxguid.lib Dsound.lib strmbaseRU.lib dsutilRU.lib subpicRU.lib subtitlesRU.lib libssfRU.lib asyncreaderRU.lib audioswitcherRU.lib avi2ac3filterRU.lib bufferfilterRU.lib cddareaderRU.lib cdxareaderRU.lib d2vsourceRU.lib decssfilterRU.lib flicsourceRU.lib dtsac3sourceRU.lib basesourceRU.lib wavdestRU.lib shoutcastsourceRU.lib streamdrivethruRU.lib vtsreaderRU.lib basesplitterRU.lib MatroskaSplitterRU.lib MatroskaMuxerRU.lib RealMediaSplitterRU.lib AviSplitterRU.lib Mpeg2DecFilterRU.lib MpaDecFilterRU.lib RoQSplitterRU.lib OggSplitterRU.lib NutSplitterRU.lib MpegSplitterRU.lib DiracSplitterRU.lib MpaSplitterRU.lib DSMSplitterRU.lib BaseMuxerRU.lib DSMMuxerRU.lib UDPReaderRU.lib FLVSplitterRU.lib zlibR.lib subtitlesourceRU.lib filtersRU.lib libvorbisidecR.lib SSFSplitterRU.lib MP4SplitterRU.lib libpngR.lib Setupapi.lib lgLcd.lib libLCDUIRU.lib  MPCVideoDecRU.lib"
-				OutputFile="$(OutDir)\$(ProjectName).exe"
+				AdditionalDependencies="comsuppw.lib Delayimp.lib psapi.lib detours.lib qtmlClient.lib wmstub.lib dxguid.lib Dsound.lib strmbaseRU.lib dsutilRU.lib subpicRU.lib subtitlesRU.lib libssfRU.lib asyncreaderRU.lib audioswitcherRU.lib avi2ac3filterRU.lib bufferfilterRU.lib cddareaderRU.lib cdxareaderRU.lib d2vsourceRU.lib decssfilterRU.lib flicsourceRU.lib dtsac3sourceRU.lib basesourceRU.lib wavdestRU.lib shoutcastsourceRU.lib streamdrivethruRU.lib vtsreaderRU.lib basesplitterRU.lib MatroskaSplitterRU.lib MatroskaMuxerRU.lib RealMediaSplitterRU.lib AviSplitterRU.lib Mpeg2DecFilterRU.lib MpaDecFilterRU.lib RoQSplitterRU.lib OggSplitterRU.lib NutSplitterRU.lib MpegSplitterRU.lib DiracSplitterRU.lib MpaSplitterRU.lib DSMSplitterRU.lib BaseMuxerRU.lib DSMMuxerRU.lib UDPReaderRU.lib FLVSplitterRU.lib zlibR.lib subtitlesourceRU.lib filtersRU.lib libvorbisidecR.lib SSFSplitterRU.lib MP4SplitterRU.lib libpngR.lib Setupapi.lib lgLcd.lib libLCDUIRU.lib MPCVideoDecRU.lib SyncClockRU.lib"
+				OutputFile="$(OutDir)\mplayercgs.exe"
 				AdditionalLibraryDirectories="..\..\..\lib;..\..\..\lib\wm7;..\..\..\lib\qt6;..\..\..\lib\detours;..\..\..\lib\lglcd;..\..\..\lib\dx"
 				IgnoreDefaultLibraryNames="MSVCRT"
 				DelayLoadDLLs="d3d9.dll;gdiplus.dll;psapi.dll"
@@ -250,9 +253,9 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/MACHINE:I386"
-				AdditionalDependencies="comsuppw.lib Delayimp.lib psapi.lib detours.lib qtmlClient.lib wmstub.lib Dsound.lib dxguid.lib strmbaseDU.lib dsutilDU.lib subpicDU.lib subtitlesDU.lib libssfDU.lib asyncreaderDU.lib audioswitcherDU.lib avi2ac3filterDU.lib bufferfilterDU.lib cddareaderDU.lib cdxareaderDU.lib d2vsourceDU.lib decssfilterDU.lib flicsourceDU.lib dtsac3sourceDU.lib basesourceDU.lib subtitlesourceDU.lib wavdestDU.lib shoutcastsourceDU.lib streamdrivethruDU.lib vtsreaderDU.lib basesplitterDU.lib MatroskaSplitterDU.lib MatroskaMuxerDU.lib RealMediaSplitterDU.lib AviSplitterDU.lib Mpeg2DecFilterDU.lib MpaDecFilterDU.lib RoQSplitterDU.lib OggSplitterDU.lib NutSplitterDU.lib MpegSplitterDU.lib DiracSplitterDU.lib MpaSplitterDU.lib DSMSplitterDU.lib BaseMuxerDU.lib DSMMuxerDU.lib UDPReaderDU.lib FLVSplitterDU.lib zlibD.lib filtersDU.lib libvorbisidecD.lib SSFSplitterDU.lib MP4SplitterDU.lib libpngD.lib Setupapi.lib lgLcd.lib libLCDUIDU.lib MPCVideoDecDU.lib"
+				AdditionalDependencies="comsuppw.lib Delayimp.lib psapi.lib detours.lib qtmlClient.lib wmstub.lib Dsound.lib dxguid.lib strmbaseDU.lib dsutilDU.lib subpicDU.lib subtitlesDU.lib libssfDU.lib asyncreaderDU.lib audioswitcherDU.lib avi2ac3filterDU.lib bufferfilterDU.lib cddareaderDU.lib cdxareaderDU.lib d2vsourceDU.lib decssfilterDU.lib flicsourceDU.lib dtsac3sourceDU.lib basesourceDU.lib subtitlesourceDU.lib wavdestDU.lib shoutcastsourceDU.lib streamdrivethruDU.lib vtsreaderDU.lib basesplitterDU.lib MatroskaSplitterDU.lib MatroskaMuxerDU.lib RealMediaSplitterDU.lib AviSplitterDU.lib Mpeg2DecFilterDU.lib MpaDecFilterDU.lib RoQSplitterDU.lib OggSplitterDU.lib NutSplitterDU.lib MpegSplitterDU.lib DiracSplitterDU.lib MpaSplitterDU.lib DSMSplitterDU.lib BaseMuxerDU.lib DSMMuxerDU.lib UDPReaderDU.lib FLVSplitterDU.lib zlibD.lib filtersDU.lib libvorbisidecD.lib SSFSplitterDU.lib MP4SplitterDU.lib libpngD.lib Setupapi.lib lgLcd.lib libLCDUIDU.lib MPCVideoDecDU.lib SyncClockDU.lib"
 				ShowProgress="0"
-				OutputFile="$(OutDir)\$(ProjectName).exe"
+				OutputFile="$(OutDir)\mplayerc.exe"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="..\..\..\lib;..\..\..\lib\wm7;..\..\..\lib\qt6;..\..\..\lib\detours;..\..\..\lib\lglcd;..\..\..\lib\dx"
 				IgnoreDefaultLibraryNames="MSVCRTD;LIBCMT"
@@ -869,6 +872,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\PPageSync.cpp"
+				>
+			</File>
+			<File
 				RelativePath="PPageTweaks.cpp"
 				>
 			</File>
@@ -1395,6 +1402,10 @@
 			</File>
 			<File
 				RelativePath="PPageSubtitles.h"
+				>
+			</File>
+			<File
+				RelativePath=".\PPageSync.h"
 				>
 			</File>
 			<File

@@ -51,3 +51,4 @@
 #include ".\parser\MP4Splitter\MP4Splitter.h"
 #include ".\parser\FLVSplitter\FLVSplitter.h"
 #include ".\parser\SSFSplitter\SSFSplitter.h"
+#include ".\misc\SyncClock\SyncClock.h"

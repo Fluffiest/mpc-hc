@@ -318,6 +318,7 @@ void CPPageOutput::OnSurfaceChange()
 
 void CPPageOutput::OnDSRendererChange(UINT nIDbutton)
 {
+	AppSettings& s = AfxGetAppSettings();
 	GetDlgItem(IDC_DX_SURFACE)->EnableWindow(FALSE);
 	GetDlgItem(IDC_DX9RESIZER_COMBO)->EnableWindow(FALSE);
 	GetDlgItem(IDC_FULLSCREEN_MONITOR_CHECK)->EnableWindow(FALSE);
@@ -325,7 +326,6 @@ void CPPageOutput::OnDSRendererChange(UINT nIDbutton)
 	GetDlgItem(IDC_DSVMR9YUVMIXER)->EnableWindow(FALSE);
 	GetDlgItem(IDC_DSVMR9ALTERNATIVEVSYNC)->EnableWindow(FALSE);
 	GetDlgItem(IDC_RESETDEVICE)->EnableWindow(FALSE);
-//	GetDlgItem(IDC_CHECK1)->EnableWindow(FALSE);
 	GetDlgItem(IDC_EVR_BUFFERS)->EnableWindow((nIDbutton - IDC_DSSYSDEF) == 11);
 	GetDlgItem(IDC_EVR_BUFFERS_TXT)->EnableWindow((nIDbutton - IDC_DSSYSDEF) == 11);
 
@@ -336,6 +336,7 @@ void CPPageOutput::OnDSRendererChange(UINT nIDbutton)
 		GetDlgItem(IDC_DSVMR9YUVMIXER)->EnableWindow(TRUE);
 		GetDlgItem(IDC_DSVMR9ALTERNATIVEVSYNC)->EnableWindow(TRUE);		
 		GetDlgItem(IDC_RESETDEVICE)->EnableWindow(TRUE);
+		s.m_RenderSettings.bSynchronizeNearest = false;
 	case 11 :	// EVR custom presenter
 		GetDlgItem(IDC_DX9RESIZER_COMBO)->EnableWindow(TRUE);
 		GetDlgItem(IDC_FULLSCREEN_MONITOR_CHECK)->EnableWindow(TRUE);

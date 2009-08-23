@@ -36,12 +36,12 @@ CGoToDlg::CGoToDlg(int time, float fps, CWnd* pParent /*=NULL*/)
 	, m_timestr(_T(""))
 	, m_framestr(_T(""))
 	, m_time(time)
-	, m_fps(fps)
+	, m_dFrameRate(fps)
 {
-	if(m_fps == 0)
+	if(m_dFrameRate == 0)
 	{
 		CString str = AfxGetApp()->GetProfileString(IDS_R_SETTINGS, _T("fps"), _T("0"));
-		if(_stscanf_s(str, _T("%f"), &m_fps) != 1) m_fps = 0;
+		if(_stscanf_s(str, _T("%f"), &m_dFrameRate) != 1) m_dFrameRate = 0;
 	}
 }
 
@@ -67,9 +67,9 @@ BOOL CGoToDlg::OnInitDialog()
 		m_timestr.Format(_T("%02d:%02d:%02d.%03d"), 
 			(m_time/(1000*60*60))%60, (m_time/(1000*60))%60, (m_time/1000)%60, m_time%1000);
 
-		if(m_fps > 0)
+		if(m_dFrameRate > 0)
 		{
-			m_framestr.Format(_T("%d, %.3f"), (int)(m_fps*m_time/1000), m_fps);
+			m_framestr.Format(_T("%d, %.3f"), (int)(m_dFrameRate*m_time/1000), m_dFrameRate);
 		}
 
 		UpdateData(FALSE);
