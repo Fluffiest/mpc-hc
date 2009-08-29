@@ -1752,6 +1752,7 @@ void CEVRAllocatorPresenter::RenderThread()
 					}
 				}
 			}
+			m_lNextSampleWait = min(max(m_lNextSampleWait , 0), 100);
 		}
 		// Wait for the next presentation time or a quit or flush event
 		dwObject = WaitForMultipleObjects(countof(hEvts), hEvts, FALSE, (DWORD)m_lNextSampleWait); 

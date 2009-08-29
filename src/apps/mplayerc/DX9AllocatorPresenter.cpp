@@ -904,19 +904,16 @@ static bool ClipToSurface(IDirect3DSurface9* pSurface, CRect& s, CRect& d)
 		d.SetRectEmpty();   
 		return(true);   
 	}   
-
 	if(d.right > w) {s.right -= (d.right-w)*sw/dw; d.right = w;}   
 	if(d.bottom > h) {s.bottom -= (d.bottom-h)*sh/dh; d.bottom = h;}   
 	if(d.left < 0) {s.left += (0-d.left)*sw/dw; d.left = 0;}   
 	if(d.top < 0) {s.top += (0-d.top)*sh/dh; d.top = 0;}   
-
 	return(true);
 }
 
 HRESULT CDX9AllocatorPresenter::InitResizers(float bicubicA, bool bNeedScreenSizeTexture)
 {
 	HRESULT hr;
-
 	do
 	{
 		if (bicubicA)
@@ -988,7 +985,6 @@ HRESULT CDX9AllocatorPresenter::InitResizers(float bicubicA, bool bNeedScreenSiz
 			return hr;
 		}
 	}
-
 	if(m_bicubicA || bNeedScreenSizeTexture)
 	{
 		if(FAILED(m_pD3DDev->CreateTexture(
@@ -1022,7 +1018,6 @@ HRESULT CDX9AllocatorPresenter::TextureCopy(CComPtr<IDirect3DTexture9> pTexture)
 
 	float w = (float)desc.Width;
 	float h = (float)desc.Height;
-
 	MYD3DVERTEX<1> v[] =
 	{
 		{0, 0, 0.5f, 2.0f, 0, 0},
@@ -1030,15 +1025,12 @@ HRESULT CDX9AllocatorPresenter::TextureCopy(CComPtr<IDirect3DTexture9> pTexture)
 		{0, h, 0.5f, 2.0f, 0, 1},
 		{w, h, 0.5f, 2.0f, 1, 1},
 	};
-
 	for(int i = 0; i < countof(v); i++)
 	{
 		v[i].x -= 0.5;
 		v[i].y -= 0.5;
 	}
-
 	hr = m_pD3DDev->SetTexture(0, pTexture);
-
 	return TextureBlt(m_pD3DDev, v, D3DTEXF_LINEAR);
 }
 
@@ -1052,13 +1044,11 @@ HRESULT CDX9AllocatorPresenter::DrawRect(DWORD _Color, DWORD _Alpha, const CRect
 		{float(_Rect.left), float(_Rect.bottom), 0.5f, 2.0f, Color},
 		{float(_Rect.right), float(_Rect.bottom), 0.5f, 2.0f, Color},
 	};
-
 	for(int i = 0; i < countof(v); i++)
 	{
 		v[i].x -= 0.5;
 		v[i].y -= 0.5;
 	}
-
 	return ::DrawRect(m_pD3DDev, v);
 }
 
@@ -1085,15 +1075,10 @@ HRESULT CDX9AllocatorPresenter::TextureResize(CComPtr<IDirect3DTexture9> pTextur
 		{dst[2].x, dst[2].y, dst[2].z, 1.0f/dst[2].z,  SrcRect.left * dx2, SrcRect.bottom * dy2},
 		{dst[3].x, dst[3].y, dst[3].z, 1.0f/dst[3].z,  SrcRect.right * dx2, SrcRect.bottom * dy2},
 	};
-
 	AdjustQuad(v, 0, 0);
-
 	hr = m_pD3DDev->SetTexture(0, pTexture);
-
 	hr = m_pD3DDev->SetPixelShader(NULL);
-
 	hr = TextureBlt(m_pD3DDev, v, filter);
-
 	return hr;
 }
 
@@ -1122,19 +1107,13 @@ HRESULT CDX9AllocatorPresenter::TextureResizeBilinear(CComPtr<IDirect3DTexture9>
 		{dst[2].x, dst[2].y, dst[2].z, 1.0f/dst[2].z,  tx0, ty1},
 		{dst[3].x, dst[3].y, dst[3].z, 1.0f/dst[3].z,  tx1, ty1},
 	};
-
 	AdjustQuad(v, 1.0, 1.0);
-
 	float fConstData[][4] = {{0.5f / w, 0.5f / h, 0, 0}, {1.0f / w, 1.0f / h, 0, 0}, {1.0f / w, 0, 0, 0}, {0, 1.0f / h, 0, 0}, {w, h, 0, 0}};
 	hr = m_pD3DDev->SetPixelShaderConstantF(0, (float*)fConstData, countof(fConstData));
-
 	hr = m_pD3DDev->SetTexture(0, pTexture);
 	hr = m_pD3DDev->SetPixelShader(m_pResizerPixelShader[0]);
-
 	hr = TextureBlt(m_pD3DDev, v, D3DTEXF_POINT);
-
 	m_pD3DDev->SetPixelShader(NULL);
-
 	return hr;
 }
 
@@ -1169,20 +1148,13 @@ HRESULT CDX9AllocatorPresenter::TextureResizeBicubic1pass(CComPtr<IDirect3DTextu
 		{dst[2].x, dst[2].y, dst[2].z, 1.0f/dst[2].z,  tx0, ty1},
 		{dst[3].x, dst[3].y, dst[3].z, 1.0f/dst[3].z,  tx1, ty1},
 	};
-
 	AdjustQuad(v, 1.0, 1.0);
-
 	hr = m_pD3DDev->SetTexture(0, pTexture);
-
 	float fConstData[][4] = {{0.5f / w, 0.5f / h, 0, 0}, {1.0f / w, 1.0f / h, 0, 0}, {1.0f / w, 0, 0, 0}, {0, 1.0f / h, 0, 0}, {w, h, 0, 0}};
 	hr = m_pD3DDev->SetPixelShaderConstantF(0, (float*)fConstData, countof(fConstData));
-
 	hr = m_pD3DDev->SetPixelShader(m_pResizerPixelShader[1]);
-
 	hr = TextureBlt(m_pD3DDev, v, D3DTEXF_POINT);
-
 	m_pD3DDev->SetPixelShader(NULL);
-
 	return hr;
 }
 
@@ -1248,9 +1220,7 @@ HRESULT CDX9AllocatorPresenter::TextureResizeBicubic2pass(CComPtr<IDirect3DTextu
 		{(float)dst1.left, (float)dst1.bottom,	0.5f, 2.0f, tx0, ty1},
 		{(float)dst1.right, (float)dst1.bottom, 0.5f, 2.0f, tx1, ty1},
 	};
-
 	AdjustQuad(vx, 1.0, 0.0);		// Casimir666 : bug ici, génére des bandes verticales! TODO : pourquoi ??????
-
 	MYD3DVERTEX<1> vy[] =
 	{
 		{dst[0].x, dst[0].y, dst[0].z, 1.0/dst[0].z, tx0_2, ty0_2},
@@ -1258,41 +1228,28 @@ HRESULT CDX9AllocatorPresenter::TextureResizeBicubic2pass(CComPtr<IDirect3DTextu
 		{dst[2].x, dst[2].y, dst[2].z, 1.0/dst[2].z, tx0_2, ty1_2},
 		{dst[3].x, dst[3].y, dst[3].z, 1.0/dst[3].z, tx1_2, ty1_2},
 	};
-
-
 	AdjustQuad(vy, 0.0, 1.0);
-
 	hr = m_pD3DDev->SetPixelShader(m_pResizerPixelShader[2]);
 	{
 		float fConstData[][4] = {{0.5f / Tex0_Width, 0.5f / Tex0_Height, 0, 0}, {1.0f / Tex0_Width, 1.0f / Tex0_Height, 0, 0}, {1.0f / Tex0_Width, 0, 0, 0}, {0, 1.0f / Tex0_Height, 0, 0}, {Tex0_Width, Tex0_Height, 0, 0}};
 		hr = m_pD3DDev->SetPixelShaderConstantF(0, (float*)fConstData, countof(fConstData));
 	}
-
 	hr = m_pD3DDev->SetTexture(0, pTexture);
-
 	CComPtr<IDirect3DSurface9> pRTOld;
 	hr = m_pD3DDev->GetRenderTarget(0, &pRTOld);
-
 	CComPtr<IDirect3DSurface9> pRT;
 	hr = m_pScreenSizeTemporaryTexture[0]->GetSurfaceLevel(0, &pRT);
 	hr = m_pD3DDev->SetRenderTarget(0, pRT);
-
 	hr = TextureBlt(m_pD3DDev, vx, D3DTEXF_POINT);
-
 	hr = m_pD3DDev->SetPixelShader(m_pResizerPixelShader[3]);
 	{
 		float fConstData[][4] = {{0.5f / Tex1_Width, 0.5f / Tex1_Height, 0, 0}, {1.0f / Tex1_Width, 1.0f / Tex1_Height, 0, 0}, {1.0f / Tex1_Width, 0, 0, 0}, {0, 1.0f / Tex1_Height, 0, 0}, {Tex1_Width, Tex1_Height, 0, 0}};
 		hr = m_pD3DDev->SetPixelShaderConstantF(0, (float*)fConstData, countof(fConstData));
 	}
-
 	hr = m_pD3DDev->SetTexture(0, m_pScreenSizeTemporaryTexture[0]);
-
 	hr = m_pD3DDev->SetRenderTarget(0, pRTOld);
-
 	hr = TextureBlt(m_pD3DDev, vy, D3DTEXF_POINT);
-
 	m_pD3DDev->SetPixelShader(NULL);
-
 	return hr;
 }
 
@@ -1457,7 +1414,6 @@ void CDX9AllocatorPresenter::UpdateAlphaBitmap()
 // Present a sample (frame) using DirectX.
 STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 {
-	TRACE(_T("--- Paint\n"));
 	AppSettings& s = AfxGetAppSettings();
 	D3DRASTER_STATUS rasterStatus;
 	REFERENCE_TIME rtSyncOffset = 0;
@@ -1473,8 +1429,6 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 	msSyncOffset = (m_ScreenSize.cy - m_uScanLineEnteringPaint) * m_dDetectedScanlineTime;
 	rtSyncOffset = REFERENCE_TIME(10000.0 * msSyncOffset);
 	m_rtEstVSyncTime = rtCurRefTime + rtSyncOffset;
-	SyncStats(m_rtEstVSyncTime);
-	SyncOffsetStats(-rtSyncOffset); // Minus because we want time to flow downward in the graph in DrawStats
 
 	if(m_WindowRect.right <= m_WindowRect.left || m_WindowRect.bottom <= m_WindowRect.top
 		|| m_NativeVideoSize.cx <= 0 || m_NativeVideoSize.cy <= 0
@@ -1484,7 +1438,6 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 	}
 
 	HRESULT hr;
-
 	CRect rSrcVid(CPoint(0, 0), m_NativeVideoSize);
 	CRect rDstVid(m_VideoRect);
 	CRect rSrcPri(CPoint(0, 0), m_WindowRect.Size());
@@ -1505,17 +1458,12 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 			{
 				static __int64 counter = 0;
 				static long start = clock();
-
 				long stop = clock();
 				long diff = stop - start;
-
 				if(diff >= 10*60*CLOCKS_PER_SEC) start = stop; // reset after 10 min (ps float has its limits in both range and accuracy)
-
 				int src = m_nCurSurface, dst = m_nDXSurface;
-
 				D3DSURFACE_DESC desc;
 				m_pVideoTexture[src]->GetLevelDesc(0, &desc);
-
 				float fConstData[][4] = 
 				{
 					{(float)desc.Width, (float)desc.Height, (float)(counter++), (float)diff / CLOCKS_PER_SEC},
@@ -1542,14 +1490,10 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 				hr = m_pD3DDev->SetRenderTarget(0, pRT);
 				hr = m_pD3DDev->SetPixelShader(NULL);
 			}
-
 			Vector dst[4];
 			Transform(rDstVid, dst);
-
 			DWORD iDX9Resizer = s.iDX9Resizer;
-
 			float A = 0;
-
 			switch(iDX9Resizer)
 			{
 			case 3: A = -0.60f; break;
@@ -1557,12 +1501,9 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 			case 5: A = -1.00f; break;
 			}
 			bool bScreenSpacePixelShaders = !m_pPixelShadersScreenSpace.IsEmpty();
-
 			hr = InitResizers(A, bScreenSpacePixelShaders);
-
 			if (!m_pScreenSizeTemporaryTexture[0] || !m_pScreenSizeTemporaryTexture[1])
 				bScreenSpacePixelShaders = false;
-
 			if (bScreenSpacePixelShaders)
 			{
 				CComPtr<IDirect3DSurface9> pRT;
@@ -1577,7 +1518,6 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 					hr = m_pD3DDev->Clear(0, NULL, D3DCLEAR_TARGET, 0, 1.0f, 0);
 				}
 			}
-
 			if(iDX9Resizer == 0 || iDX9Resizer == 1)
 			{
 				D3DTEXTUREFILTERTYPE Filter = iDX9Resizer == 0 ? D3DTEXF_POINT : D3DTEXF_LINEAR;
@@ -1593,7 +1533,6 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 			{
 				hr = TextureResizeBicubic2pass(pVideoTexture, dst, rSrcVid);
 			}
-
 			if (bScreenSpacePixelShaders)
 			{
 				static __int64 counter = 555;
@@ -1684,7 +1623,6 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 	if (pApp->m_fDisplayStats) DrawStats();
 	if (m_pOSDTexture) AlphaBlt(rSrcPri, rDstPri, m_pOSDTexture);
 	m_pD3DDev->EndScene();
-
 	if (m_pD3DDevEx)
 	{
 		if (m_bIsFullscreen)
@@ -1699,6 +1637,11 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 		else
 			hr = m_pD3DDev->Present(rSrcPri, rDstPri, NULL, NULL);
 	}
+
+	// Calculate timing statistics
+	if (m_pRefClock) m_pRefClock->GetTime(&rtCurRefTime); // To check if we called Present too late to hit the right vsync
+	SyncStats(max(m_rtEstVSyncTime, rtCurRefTime)); // Max of estimate and real. Sometimes Present may actually return immediately so we need the estimate as a lower bound
+	SyncOffsetStats(-rtSyncOffset); // Minus because we want time to flow downward in the graph in DrawStats
 
 	// Adjust sync
 	if (s.m_RenderSettings.bSynchronizeVideo) m_pGenlock->ControlClock(msSyncOffset);
