@@ -1674,7 +1674,6 @@ void CEVRAllocatorPresenter::RenderThread()
 	DWORD dwTaskIndex = 0;
 	HANDLE hEvts[] = {m_hEvtQuit, m_hEvtFlush};
 	bool bQuit = false;
-	bool bSynchronizeNearest = false; // True if a frame shall be dislayed at every vsync and dropped and duplicated as necessary
 	TIMECAPS tc;
 	DWORD dwResolution;
 	LONGLONG llRefClockTime;
@@ -1702,7 +1701,6 @@ void CEVRAllocatorPresenter::RenderThread()
 		pNewSample = NULL;
 		m_lNextSampleWait = 1;
 		samplesLeft = 0;
-		bSynchronizeNearest = s.m_RenderSettings.bSynchronizeNearest;
 
 		if (m_nRenderState == Started || !m_bPrerolled) // If either streaming or the pre-roll sample
 		{
@@ -1720,7 +1718,7 @@ void CEVRAllocatorPresenter::RenderThread()
 					m_lNextSampleWait = (LONG)((m_llSampleTime - llRefClockTime) / 10000); // Time left until sample is due, in ms
 					if (m_lNextSampleWait < 0)
 						m_lNextSampleWait = 0; // We came too late. Race through, discard the sample and get a new one
-					else if (bSynchronizeNearest) // Present at the closest "safe" occasion at tergetSyncOffset ms before vsync to avoid tearing
+					else if (s.m_RenderSettings.bSynchronizeNearest) // Present at the closest "safe" occasion at tergetSyncOffset ms before vsync to avoid tearing
 					{
 						REFERENCE_TIME rtRefClockTimeNow; if (m_pRefClock) m_pRefClock->GetTime(&rtRefClockTimeNow); // Reference clock time now
 						LONG lLastVsyncTime = (LONG)((m_rtEstVSyncTime - rtRefClockTimeNow) / 10000); // Time of previous vsync relative to now
@@ -1736,17 +1734,19 @@ void CEVRAllocatorPresenter::RenderThread()
 
 						if (m_bSnapToVSync)
 						{
-							if ((m_lShiftToNearestPrev - m_lShiftToNearest) > (GetDisplayCycle() / 2.0)) // If a step down
+							LONG lDisplayCycle2 = (LONG)(GetDisplayCycle() / 2.0); // These are a couple of empirically determined constants used the control the "snap" function
+							LONG lDisplayCycle3 = (LONG)(GetDisplayCycle() / 3.0);
+							if ((m_lShiftToNearestPrev - m_lShiftToNearest) > lDisplayCycle2) // If a step down in the m_lShiftToNearest function. Display slower than video. 
 							{
 								m_bVideoSlowerThanDisplay = false;
-								m_llHysteresis = -(LONGLONG)(10000.0 * GetDisplayCycle() / 3.0);
+								m_llHysteresis = -(LONGLONG)(10000 * lDisplayCycle3);
 							}
-							else if ((m_lShiftToNearest - m_lShiftToNearestPrev) > (GetDisplayCycle() / 2.0)) // If a step up
+							else if ((m_lShiftToNearest - m_lShiftToNearestPrev) > lDisplayCycle2) // If a step up
 							{
 								m_bVideoSlowerThanDisplay = true;
-								m_llHysteresis = (LONGLONG)(10000.0 * GetDisplayCycle() / 3.0);
+								m_llHysteresis = (LONGLONG)(10000 * lDisplayCycle3);
 							}
-							else if ((m_lShiftToNearest < (2 * (LONG)(GetDisplayCycle() / 3.0))) && (m_lShiftToNearest > (LONG)(GetDisplayCycle() / 3.0)))
+							else if ((m_lShiftToNearest < (2 * lDisplayCycle3)) && (m_lShiftToNearest > lDisplayCycle3))
 								m_llHysteresis = 0; // Reset when between 1/3 and 2/3 of the way either way
 						}
 					}

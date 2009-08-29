@@ -1685,11 +1685,6 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 	if (m_pOSDTexture) AlphaBlt(rSrcPri, rDstPri, m_pOSDTexture);
 	m_pD3DDev->EndScene();
 
-	if (pApp->m_fResetStats)
-	{
-		ResetStats();
-		pApp->m_fResetStats = false;
-	}
 	if (m_pD3DDevEx)
 	{
 		if (m_bIsFullscreen)
@@ -1719,7 +1714,13 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 		m_lAudioLagMax = max((long)m_lAudioLag, m_lAudioLagMax);
 		m_pAudioStats->GetStatParam(AM_AUDREND_STAT_PARAM_SLAVE_MODE, &m_lAudioSlaveMode, &tmp);
 	}
-	
+
+	if (pApp->m_fResetStats)
+	{
+		ResetStats();
+		pApp->m_fResetStats = false;
+	}
+
 	bool fResetDevice = m_bPendingResetDevice;
 	if(hr == D3DERR_DEVICELOST && m_pD3DDev->TestCooperativeLevel() == D3DERR_DEVICENOTRESET || hr == S_PRESENT_MODE_CHANGED)
 		fResetDevice = true;
