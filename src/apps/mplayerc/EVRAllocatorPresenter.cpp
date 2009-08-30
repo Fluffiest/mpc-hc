@@ -1262,10 +1262,26 @@ bool CEVRAllocatorPresenter::GetSampleFromMixer()
 			else
 			{
 				newSample = true;
+				if (AfxGetMyApp()->m_fTearingTest)
+				{
+					RECT rcTearing;
+
+					rcTearing.left = m_nTearingPos;
+					rcTearing.top = 0;
+					rcTearing.right	= rcTearing.left + 4;
+					rcTearing.bottom = m_NativeVideoSize.cy;
+					m_pD3DDev->ColorFill(m_pVideoSurface[dwSurface], &rcTearing, D3DCOLOR_ARGB (255,255,0,0));
+
+					rcTearing.left = (rcTearing.right + 15) % m_NativeVideoSize.cx;
+					rcTearing.right	= rcTearing.left + 4;
+					m_pD3DDev->ColorFill(m_pVideoSurface[dwSurface], &rcTearing, D3DCOLOR_ARGB (255,255,0,0));
+					m_nTearingPos = (m_nTearingPos + 7) % m_NativeVideoSize.cx;
+				}	
 				MoveToScheduledList(pSample, false); // Schedule, then go back to see if there is more where that came from
 			}
 		}
 	}
+
 	return newSample;
 }
 

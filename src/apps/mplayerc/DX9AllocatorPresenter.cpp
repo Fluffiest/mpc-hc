@@ -2851,6 +2851,24 @@ STDMETHODIMP CVMR9AllocatorPresenter::PresentImage(DWORD_PTR dwUserID, VMR9Prese
 		m_AspectRatio.SetSize(arx, ary);
 		AfxGetApp()->m_pMainWnd->PostMessage(WM_REARRANGERENDERLESS);
 	}
+
+	if (AfxGetMyApp()->m_fTearingTest)
+	{
+		RECT rcTearing;
+		
+		rcTearing.left = m_nTearingPos;
+		rcTearing.top = 0;
+		rcTearing.right = rcTearing.left + 4;
+		rcTearing.bottom = m_NativeVideoSize.cy;
+		m_pD3DDev->ColorFill(m_pVideoSurface[m_nCurSurface], &rcTearing, D3DCOLOR_ARGB (255,255,0,0));
+
+		rcTearing.left	= (rcTearing.right + 15) % m_NativeVideoSize.cx;
+		rcTearing.right	= rcTearing.left + 4;
+		m_pD3DDev->ColorFill (m_pVideoSurface[m_nCurSurface], &rcTearing, D3DCOLOR_ARGB (255,255,0,0));
+
+		m_nTearingPos = (m_nTearingPos + 7) % m_NativeVideoSize.cx;
+	}
+
 	Paint(true);
 	m_pcFramesDrawn++;
     return S_OK;

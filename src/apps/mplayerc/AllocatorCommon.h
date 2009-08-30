@@ -312,6 +312,7 @@ namespace DSObjects
 		virtual void OnResetDevice() {};
 		virtual bool ResetDevice();
 
+		int m_nTearingPos;
 		VMR9AlphaBitmap m_VMR9AlphaBitmap;
 		CAutoVectorPtr<BYTE> m_VMR9AlphaBitmapData;
 		CRect m_VMR9AlphaBitmapRect;
