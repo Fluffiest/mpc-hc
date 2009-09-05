@@ -1641,7 +1641,8 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 
 	// Calculate timing statistics
 	if (m_pRefClock) m_pRefClock->GetTime(&rtCurRefTime); // To check if we called Present too late to hit the right vsync
-	SyncStats(max(m_rtEstVSyncTime, rtCurRefTime)); // Max of estimate and real. Sometimes Present may actually return immediately so we need the estimate as a lower bound
+	m_rtEstVSyncTime = max(m_rtEstVSyncTime, rtCurRefTime); // Sometimes the real value is slips to be larger than the estimated value
+	SyncStats(m_rtEstVSyncTime); // Max of estimate and real. Sometimes Present may actually return immediately so we need the estimate as a lower bound
 	SyncOffsetStats(-rtSyncOffset); // Minus because we want time to flow downward in the graph in DrawStats
 
 	// Adjust sync
@@ -1783,7 +1784,7 @@ void CDX9AllocatorPresenter::DrawStats()
 		CString	strText;
 		int TextHeight = 25.0*m_TextScale + 0.5;
 
-		strText.Format(L"Frames drawn from stream start: %d | Time from stream start: %.0f ms", m_pcFramesDrawn, m_llSampleTime / 10000.0);
+		strText.Format(L"Frames drawn from stream start: %d | Time from stream start: %.0f s", m_pcFramesDrawn, m_llSampleTime / 10000000.0);
 		DrawText(rc, strText, 1);
 		OffsetRect(&rc, 0, TextHeight);
 
@@ -1871,7 +1872,7 @@ void CDX9AllocatorPresenter::DrawStats()
 			OffsetRect(&rc, 0, TextHeight);
 			if (s.m_RenderSettings.bSynchronizeNearest)
 			{
-				strText.Format(L"Sample paint time correction: %2d ms | %s | %d", m_lShiftToNearest, (m_llHysteresis == 0) ? L"| No snap to vsync" : L"| Snap to vsync", m_llHysteresis /10000);
+				strText.Format(L"Sample paint time correction: %2d ms %s | %d", m_lShiftToNearest, (m_llHysteresis == 0) ? L"| No snap to vsync" : L"| Snap to vsync", m_llHysteresis /10000);
 				DrawText(rc, strText, 1);
 				OffsetRect(&rc, 0, TextHeight);
 

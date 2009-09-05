@@ -619,6 +619,7 @@ CEVRAllocatorPresenter::CEVRAllocatorPresenter(HWND hWnd, HRESULT& hr, CString &
 	m_BorderColor = RGB (0,0,0);
 	m_pOuterEVR = NULL;
 	m_bPrerolled = false;
+	m_lShiftToNearest = -1; // Illegal value to start with
 }
 
 CEVRAllocatorPresenter::~CEVRAllocatorPresenter(void)
@@ -947,6 +948,7 @@ STDMETHODIMP CEVRAllocatorPresenter::ProcessMessage(MFVP_MESSAGE_TYPE eMessage, 
 	{
 	case MFVP_MESSAGE_BEGINSTREAMING : // The EVR switched from stopped to paused. The presenter should allocate resources
 		hr = BeginStreaming();
+		m_llHysteresis = 0;
 		break;
 
 	case MFVP_MESSAGE_CANCELSTEP:
@@ -1737,7 +1739,6 @@ void CEVRAllocatorPresenter::RenderThread()
 					else if (s.m_RenderSettings.bSynchronizeNearest) // Present at the closest "safe" occasion at tergetSyncOffset ms before vsync to avoid tearing
 					{
 						REFERENCE_TIME rtRefClockTimeNow; if (m_pRefClock) m_pRefClock->GetTime(&rtRefClockTimeNow); // Reference clock time now
-						if (m_rtEstVSyncTime < 1) m_rtEstVSyncTime = rtRefClockTimeNow; // First sample, if not prerolled (but it probably always is)
 						LONG lLastVsyncTime = (LONG)((m_rtEstVSyncTime - rtRefClockTimeNow) / 10000); // Time of previous vsync relative to now
 
 						LONGLONG llNextSampleWait = (LONGLONG)(((double)lLastVsyncTime + GetDisplayCycle() - targetSyncOffset) * 10000); // Next safe time to Paint()
@@ -1746,35 +1747,32 @@ void CEVRAllocatorPresenter::RenderThread()
 							llNextSampleWait = llNextSampleWait + (LONGLONG)(GetDisplayCycle() * 10000); // Try the next possible time, one display cycle ahead
 						}
 						m_lNextSampleWait = (LONG)(llNextSampleWait / 10000);
-						if (llNextSampleWait < 1)
-						{
-							_tprintf(_T("--- llNextSampleWait < 1\n"));
-						}
 
 						m_lShiftToNearestPrev = m_lShiftToNearest;
 						m_lShiftToNearest = (LONG)((llRefClockTime + llNextSampleWait - m_llSampleTime) / 10000); // The adjustment made to get to the sweet point in time, in ms
-						if (m_lShiftToNearest < 0)
-						{
-							_tprintf(_T("--- m_lShiftToNearest: %d \n"), m_lShiftToNearest);
-							_tprintf(_T("--- m_llHysteresis: %d\n"), m_llHysteresis / 10000);
-						}
 
 						if (m_bSnapToVSync)
 						{
+							LONG lDisplayCycle1 = (LONG)(GetDisplayCycle());
 							LONG lDisplayCycle2 = (LONG)(GetDisplayCycle() / 2.0); // These are a couple of empirically determined constants used the control the "snap" function
 							LONG lDisplayCycle3 = (LONG)(GetDisplayCycle() / 3.0);
-							if ((m_lShiftToNearestPrev - m_lShiftToNearest) > lDisplayCycle2) // If a step down in the m_lShiftToNearest function. Display slower than video. 
+							if ((m_lShiftToNearest > -1) && (m_lShiftToNearest < (lDisplayCycle1 + 1))) // The hysteresis may experience glitches at start of stream
 							{
-								m_bVideoSlowerThanDisplay = false;
-								m_llHysteresis = -(LONGLONG)(10000 * lDisplayCycle3);
+								if ((m_lShiftToNearestPrev - m_lShiftToNearest) > lDisplayCycle2) // If a step down in the m_lShiftToNearest function. Display slower than video. 
+								{
+									m_bVideoSlowerThanDisplay = false;
+									m_llHysteresis = -(LONGLONG)(10000 * lDisplayCycle3);
+								}
+								else if ((m_lShiftToNearest - m_lShiftToNearestPrev) > lDisplayCycle2) // If a step up
+								{
+									m_bVideoSlowerThanDisplay = true;
+									m_llHysteresis = (LONGLONG)(10000 * lDisplayCycle3);
+								}
+								else if ((m_lShiftToNearest < (2 * lDisplayCycle3)) && (m_lShiftToNearest > lDisplayCycle3))
+									m_llHysteresis = 0; // Reset when between 1/3 and 2/3 of the way either way
 							}
-							else if ((m_lShiftToNearest - m_lShiftToNearestPrev) > lDisplayCycle2) // If a step up
-							{
-								m_bVideoSlowerThanDisplay = true;
-								m_llHysteresis = (LONGLONG)(10000 * lDisplayCycle3);
-							}
-							else if ((m_lShiftToNearest < (2 * lDisplayCycle3)) && (m_lShiftToNearest > lDisplayCycle3))
-								m_llHysteresis = 0; // Reset when between 1/3 and 2/3 of the way either way
+							else
+								m_llHysteresis = 0;
 						}
 					}
 				}

@@ -53,7 +53,7 @@
 				Name="VCCLCompilerTool"
 				AdditionalOptions="/MP"
 				AdditionalIncludeDirectories="..\..\..\include;..\..\..\include\dx;..\..\..\include\atl;..\..\filters\BaseClasses;..\..\zlib"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;DETOURS_X32;GOTHTRACE"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;DETOURS_X32"
 				ExceptionHandling="1"
 				EnableEnhancedInstructionSet="0"
 				UsePrecompiledHeader="2"
