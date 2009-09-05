@@ -387,7 +387,8 @@ CDX9AllocatorPresenter::CDX9AllocatorPresenter(HWND hWnd, HRESULT& hr, bool bIsE
 	m_rtFrameCycle(0.0),
 	m_dFrameCycle(0.0),
 	m_dOptimumDisplayCycle(0.0),
-	m_dCycleDifference(1.0)
+	m_dCycleDifference(1.0),
+	m_rtEstVSyncTime(0)
 {
 	if(FAILED(hr)) 
 	{
@@ -1870,7 +1871,7 @@ void CDX9AllocatorPresenter::DrawStats()
 			OffsetRect(&rc, 0, TextHeight);
 			if (s.m_RenderSettings.bSynchronizeNearest)
 			{
-				strText.Format(L"Sample paint time correction: %2d ms %s", m_lShiftToNearest, (m_llHysteresis == 0) ? L"| No snap to vsync" : L"| Snap to vsync");
+				strText.Format(L"Sample paint time correction: %2d ms | %s | %d", m_lShiftToNearest, (m_llHysteresis == 0) ? L"| No snap to vsync" : L"| Snap to vsync", m_llHysteresis /10000);
 				DrawText(rc, strText, 1);
 				OffsetRect(&rc, 0, TextHeight);
 

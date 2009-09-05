@@ -1737,6 +1737,7 @@ void CEVRAllocatorPresenter::RenderThread()
 					else if (s.m_RenderSettings.bSynchronizeNearest) // Present at the closest "safe" occasion at tergetSyncOffset ms before vsync to avoid tearing
 					{
 						REFERENCE_TIME rtRefClockTimeNow; if (m_pRefClock) m_pRefClock->GetTime(&rtRefClockTimeNow); // Reference clock time now
+						if (m_rtEstVSyncTime < 1) m_rtEstVSyncTime = rtRefClockTimeNow; // First sample, if not prerolled (but it probably always is)
 						LONG lLastVsyncTime = (LONG)((m_rtEstVSyncTime - rtRefClockTimeNow) / 10000); // Time of previous vsync relative to now
 
 						LONGLONG llNextSampleWait = (LONGLONG)(((double)lLastVsyncTime + GetDisplayCycle() - targetSyncOffset) * 10000); // Next safe time to Paint()
@@ -1745,8 +1746,18 @@ void CEVRAllocatorPresenter::RenderThread()
 							llNextSampleWait = llNextSampleWait + (LONGLONG)(GetDisplayCycle() * 10000); // Try the next possible time, one display cycle ahead
 						}
 						m_lNextSampleWait = (LONG)(llNextSampleWait / 10000);
+						if (llNextSampleWait < 1)
+						{
+							_tprintf(_T("--- llNextSampleWait < 1\n"));
+						}
+
 						m_lShiftToNearestPrev = m_lShiftToNearest;
 						m_lShiftToNearest = (LONG)((llRefClockTime + llNextSampleWait - m_llSampleTime) / 10000); // The adjustment made to get to the sweet point in time, in ms
+						if (m_lShiftToNearest < 0)
+						{
+							_tprintf(_T("--- m_lShiftToNearest: %d \n"), m_lShiftToNearest);
+							_tprintf(_T("--- m_llHysteresis: %d\n"), m_llHysteresis / 10000);
+						}
 
 						if (m_bSnapToVSync)
 						{
@@ -1768,7 +1779,6 @@ void CEVRAllocatorPresenter::RenderThread()
 					}
 				}
 			}
-			m_lNextSampleWait = min(max(m_lNextSampleWait , 0), 100);
 		}
 		// Wait for the next presentation time or a quit or flush event
 		dwObject = WaitForMultipleObjects(countof(hEvts), hEvts, FALSE, (DWORD)m_lNextSampleWait); 

@@ -757,8 +757,8 @@ BOOL CMPlayerCApp::InitInstance()
 {
 	long		lError;
 
+#ifdef GOTHTRACE
 	// Used for tracing when debugger can't be used, e.g. when using some commercial decoders
-	/*
 	if (AllocConsole())
 	{
 		FILE * foo; // Not used
@@ -768,7 +768,7 @@ BOOL CMPlayerCApp::InitInstance()
 	}
 	else
 		AfxMessageBox(_T("Could not create console"));
-	*/
+#endif
 
 	DetourRestoreAfterWith();
     DetourTransactionBegin();
