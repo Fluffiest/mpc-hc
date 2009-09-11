@@ -339,6 +339,7 @@ namespace DSObjects
 
 		UINT m_uScanLineEnteringPaint; // The active scan line when entering Paint()
 		REFERENCE_TIME m_rtEstVSyncTime; // Next vsync time in reference clock "coordinates"
+		HANDLE m_hEventGoth; //precise wait time control handle for sync to nearest in VMR9 
 
 		double m_fAvrFps; // Estimate the true FPS as given by the distance between vsyncs when a frame has been presented
 		double m_fJitterStdDev; // VSync estimate std dev

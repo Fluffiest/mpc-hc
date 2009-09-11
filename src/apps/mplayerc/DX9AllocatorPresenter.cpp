@@ -2729,6 +2729,9 @@ STDMETHODIMP CVMR9AllocatorPresenter::StartPresenting(DWORD_PTR dwUserID)
 	EstimateRefreshTimings();
 	if (m_rtFrameCycle > 0.0) m_dCycleDifference = GetCycleDifference(); // Might have moved to another display
 
+	//create precise wait time control handle for sync to nearest in VMR9 
+	m_hEventGoth = CreateEvent(NULL, TRUE, FALSE, NULL);
+
 	return S_OK;
 }
 
@@ -2736,6 +2739,10 @@ STDMETHODIMP CVMR9AllocatorPresenter::StopPresenting(DWORD_PTR dwUserID)
 {
 	m_pGenlock->ResetTiming();
 	m_pRefClock = NULL;
+
+	if(m_hEventGoth)
+		CloseHandle(m_hEventGoth);
+
 	return S_OK;
 }
 
@@ -2763,6 +2770,13 @@ STDMETHODIMP CVMR9AllocatorPresenter::PresentImage(DWORD_PTR dwUserID, VMR9Prese
 			{
 				m_fps = 10000000.0 / m_rtFrameCycle;
 				m_dCycleDifference = GetCycleDifference();
+
+				//This is for synctonearest in VMR9
+				//by tomasen@gmail.com
+				if (abs(m_dCycleDifference) < 0.05) 
+					m_bSnapToVSync = true;
+				else
+					m_bSnapToVSync = false;
 			}
 			m_bInterlaced = ExtractInterlaced(&mt);
 
@@ -2870,6 +2884,90 @@ STDMETHODIMP CVMR9AllocatorPresenter::PresentImage(DWORD_PTR dwUserID, VMR9Prese
 
 		m_nTearingPos = (m_nTearingPos + 7) % m_NativeVideoSize.cx;
 	}
+
+	//Sync To Nearest For VMR9
+	AppSettings& s = AfxGetAppSettings();
+	while(s.m_RenderSettings.bSynchronizeNearest ){
+		double targetSyncOffset;
+		m_pGenlock->GetTargetSyncOffset(&targetSyncOffset); // Target sync offset from settings
+		if (m_rtFrameCycle > 0.0){ 
+			if(targetSyncOffset*15000 > m_rtFrameCycle){
+				targetSyncOffset = (double)m_rtFrameCycle /15000;
+				m_pGenlock->SetTargetSyncOffset(targetSyncOffset);
+				//I think we should disable bSynchronizeNearest for this video if 
+				//targetSyncOffset is greater than 2/3 of m_rtFrameCycle -- by Tomasen
+				break;
+			}
+		}else if(targetSyncOffset*20000 >(lpPresInfo->rtEnd - lpPresInfo->rtStart)){
+				//There is high chance we should disable bSynchronizeNearest for this video 
+				//if targetSyncOffset is greater than 1/2 of next frame duration -- by Tomasen
+				break;
+		}
+
+		//Basically same as EVR version, but since we should present image immediately (in theory),
+		//We just wait whith in one display cycle. Feedbacks and discuss are wellcome.
+		//Also, following code might need clean up -- tomasen@gmail.com
+		REFERENCE_TIME rtCurRefTime;
+		if (m_pRefClock) m_pRefClock->GetTime(&rtCurRefTime);
+		LONGLONG llRefClockTime = lpPresInfo->rtStart - min( (GetDisplayCycle() * 10000) , (lpPresInfo->rtEnd - lpPresInfo->rtStart)) ;
+
+		m_lNextSampleWait = (LONG)((m_llSampleTime - llRefClockTime) / 10000); // Time left until sample is due, in ms
+		if (m_lNextSampleWait < 0)
+			m_lNextSampleWait = 0; // We came too late. Race through, discard the sample and get a new one
+		else if (s.m_RenderSettings.bSynchronizeNearest ) // Present at the closest "safe" occasion at tergetSyncOffset ms before vsync to avoid tearing
+		{
+			REFERENCE_TIME rtRefClockTimeNow; if (m_pRefClock) m_pRefClock->GetTime(&rtRefClockTimeNow); // Reference clock time now
+			LONG lLastVsyncTime = (LONG)((m_rtEstVSyncTime - rtRefClockTimeNow) / 10000); // Time of previous vsync relative to now
+
+			LONGLONG llNextSampleWait = (LONGLONG)(((double)lLastVsyncTime + GetDisplayCycle() - targetSyncOffset) * 10000); // Next safe time to Paint()
+			LONGLONG llEachStep = (GetDisplayCycle() * 10000); // While the proposed time is in the past of sample presentation time
+			if(llEachStep){
+				LONGLONG llHowManyStepWeNeed = ((m_llSampleTime + m_llHysteresis) - (llRefClockTime + llNextSampleWait)) / llEachStep;   // Try the next possible time, one display cycle ahead
+				llNextSampleWait += llEachStep * llHowManyStepWeNeed;
+			}else
+				llNextSampleWait = 10000;
+			m_lNextSampleWait = (LONG)(llNextSampleWait / 10000);
+			m_lShiftToNearestPrev = m_lShiftToNearest;
+			m_lShiftToNearest = (LONG)((llRefClockTime + llNextSampleWait - m_llSampleTime) / 10000); // The adjustment made to get to the sweet point in time, in ms
+
+			if (abs(GetCycleDifference()) < 0.05)
+			{
+				LONG lDisplayCycle2 = (LONG)(GetDisplayCycle() / 2.0); // These are a couple of empirically determined constants used the control the "snap" function
+				LONG lDisplayCycle3 = (LONG)(GetDisplayCycle() / 3.0);
+				if (m_bSnapToVSync) // If a step down in the m_lShiftToNearest function. Display slower than video. 
+				{
+					m_bVideoSlowerThanDisplay = false;
+					m_llHysteresis = -(LONGLONG)(10000 * lDisplayCycle3);
+				}
+				else if ((m_lShiftToNearest - m_lShiftToNearestPrev) > lDisplayCycle2) // If a step up
+				{
+					m_bVideoSlowerThanDisplay = true;
+					m_llHysteresis = (LONGLONG)(10000 * lDisplayCycle3);
+				}
+				else if ((m_lShiftToNearest < (2 * lDisplayCycle3)) && (m_lShiftToNearest > lDisplayCycle3))
+					m_llHysteresis = 0; // Reset when between 1/3 and 2/3 of the way either way
+			}
+		}
+		if(m_lNextSampleWait*10000 > (lpPresInfo->rtEnd - lpPresInfo->rtStart)){
+			//m_pcFramesDropped++;
+			//Might should just drop this frame
+			//Currently frame dropping seems to be handled by VMR9 itself
+			
+		}else{
+			//Every thing is good here
+		}
+			
+		if (m_lNextSampleWait <= 0)
+			m_lNextSampleWait = 0;
+		else{
+			//this should be more precise than Sleep() ? Tomasen
+			if(m_hEventGoth)
+				WaitForSingleObject(m_hEventGoth, m_lNextSampleWait);
+		}
+
+		break;
+	}
+	//end of Sync To Nearest For VMR9
 
 	Paint(true);
 	m_pcFramesDrawn++;
