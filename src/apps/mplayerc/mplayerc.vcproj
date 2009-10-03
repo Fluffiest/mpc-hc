@@ -2,7 +2,7 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9,00"
-	Name="mplayerc"
+	Name="mpc-hc"
 	ProjectGUID="{8CE7E5D0-C821-47AC-A247-28EC95B34670}"
 	RootNamespace="mplayerc"
 	Keyword="MFCProj"
@@ -1886,7 +1886,7 @@
 				Name="shaders"
 				>
 				<File
-					RelativePath=".\res\shaders\BT601BT701.psh"
+					RelativePath=".\res\shaders\BT601BT709.psh"
 					>
 				</File>
 				<File
@@ -1927,6 +1927,14 @@
 				</File>
 				<File
 					RelativePath=".\res\shaders\levels.psh"
+					>
+				</File>
+				<File
+					RelativePath=".\res\shaders\levels2.psh"
+					>
+				</File>
+				<File
+					RelativePath=".\res\shaders\levels3.psh"
 					>
 				</File>
 				<File
@@ -2008,19 +2016,7 @@
 			>
 		</File>
 		<File
-			RelativePath=".\res\shaders\BT601BT709.psh"
-			>
-		</File>
-		<File
 			RelativePath=".\ChangeLog"
-			>
-		</File>
-		<File
-			RelativePath=".\res\shaders\levels2.psh"
-			>
-		</File>
-		<File
-			RelativePath=".\res\shaders\levels3.psh"
 			>
 		</File>
 		<File

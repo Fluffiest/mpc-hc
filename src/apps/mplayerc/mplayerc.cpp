@@ -239,6 +239,7 @@ public:
 	CString m_strBuildNumber;
 	CString m_MPCCompiler;
 	CString m_FfmpegCompiler;
+	afx_msg void OnHomepage(NMHDR *pNMHDR, LRESULT *pResult);
 };
 
 CAboutDlg::CAboutDlg() : CDialog(CAboutDlg::IDD), m_appname(_T(""))
@@ -265,6 +266,7 @@ BEGIN_MESSAGE_MAP(CAboutDlg, CDialog)
 	//{{AFX_MSG_MAP(CAboutDlg)
 		// No message handlers
 	//}}AFX_MSG_MAP
+	ON_NOTIFY(NM_CLICK, IDC_SOURCEFORGE_LINK, &CAboutDlg::OnHomepage)
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
@@ -943,7 +945,14 @@ BOOL CMPlayerCApp::InitInstance()
 	&& (!(m_s.fAllowMultipleInst || (m_s.nCLSwitches&CLSW_NEW) || m_cmdln.IsEmpty())
 		|| (m_s.nCLSwitches&CLSW_ADD)))
 	{
-		if(HWND hWnd = ::FindWindow(MPC_WND_CLASS_NAME, NULL))
+		int wait_count = 0;
+		HWND hWnd = ::FindWindow(MPC_WND_CLASS_NAME, NULL);
+		while(!hWnd && (wait_count++<200))
+		{
+			Sleep(100);
+			hWnd = ::FindWindow(MPC_WND_CLASS_NAME, NULL);
+		}
+		if(hWnd && (wait_count<200))
 		{
 			SetForegroundWindow(hWnd);
 
@@ -953,7 +962,7 @@ BOOL CMPlayerCApp::InitInstance()
 			SendCommandLine(hWnd);
 
 			return FALSE;
-		}
+		} 
 	}
 
 	if(!__super::InitInstance())
@@ -1653,6 +1662,9 @@ void CMPlayerCApp::Settings::UpdateData(bool fSave)
 		
 		pApp->WriteProfileString(IDS_R_SETTINGS, IDS_RS_SHADERLIST, strShaderList);
 		pApp->WriteProfileString(IDS_R_SETTINGS, IDS_RS_SHADERLISTSCREENSPACE, strShaderListScreenSpace);
+		pApp->WriteProfileInt(IDS_R_SETTINGS, IDS_RS_TOGGLESHADER, (int)m_bToggleShader);
+		pApp->WriteProfileInt(IDS_R_SETTINGS, IDS_RS_TOGGLESHADERSSCREENSPACE, (int)m_bToggleShaderScreenSpace);
+
 		pApp->WriteProfileInt(IDS_R_SETTINGS, IDS_RS_EVR_BUFFERS, iEvrBuffers);
 		pApp->WriteProfileInt(IDS_R_SETTINGS, IDS_RS_SHOWOSD, (int)fShowOSD);
 		pApp->WriteProfileInt(IDS_R_SETTINGS, IDS_RS_ENABLEEDLEDITOR, (int)fEnableEDLEditor);
@@ -2206,7 +2218,7 @@ void CMPlayerCApp::Settings::UpdateData(bool fSave)
 		FFmpegFilters = pApp->GetProfileInt(IDS_R_INTERNAL_FILTERS, IDS_RS_FFMPEGFILTERS, ~0);
 
 		logofn = pApp->GetProfileString(IDS_R_SETTINGS, IDS_RS_LOGOFILE, _T(""));
-		logoid = pApp->GetProfileInt(IDS_R_SETTINGS, IDS_RS_LOGOID, IDF_LOGO7);
+		logoid = pApp->GetProfileInt(IDS_R_SETTINGS, IDS_RS_LOGOID, IDF_LOGO4);
 		logoext = !!pApp->GetProfileInt(IDS_R_SETTINGS, IDS_RS_LOGOEXT, 0);
 
 		fHideCDROMsSubMenu = !!pApp->GetProfileInt(IDS_R_SETTINGS, IDS_RS_HIDECDROMSSUBMENU, 0);		
@@ -2338,6 +2350,9 @@ void CMPlayerCApp::Settings::UpdateData(bool fSave)
 		dSaturation		= (float)_tstof(pApp->GetProfileString(IDS_R_SETTINGS, IDS_RS_COLOR_SATURATION,	_T("1")));
 		strShaderList	= pApp->GetProfileString(IDS_R_SETTINGS, IDS_RS_SHADERLIST, _T(""));
 		strShaderListScreenSpace	= pApp->GetProfileString(IDS_R_SETTINGS, IDS_RS_SHADERLISTSCREENSPACE, _T(""));
+		m_bToggleShader = pApp->GetProfileInt(IDS_R_SETTINGS, IDS_RS_TOGGLESHADER, 0);
+		m_bToggleShaderScreenSpace = pApp->GetProfileInt(IDS_R_SETTINGS, IDS_RS_TOGGLESHADERSSCREENSPACE, 0);
+
 		iEvrBuffers		= pApp->GetProfileInt(IDS_R_SETTINGS, IDS_RS_EVR_BUFFERS, 5);
 		fShowOSD		= !!pApp->GetProfileInt(IDS_R_SETTINGS, IDS_RS_SHOWOSD, 1);
 		fEnableEDLEditor= !!pApp->GetProfileInt(IDS_R_SETTINGS, IDS_RS_ENABLEEDLEDITOR, FALSE);
@@ -3115,14 +3130,14 @@ void CMPlayerCApp::SetLanguage (int nLanguage)
 		Version.Create (strSatellite);
 		strSatVersion = Version.GetFileVersionEx();
 
-		if (strSatVersion == _T("1.1.1.0"))
+		if (strSatVersion == _T("1.3.0.0"))
 			hMod = LoadLibrary (strSatellite);
 		else
 		{
 			bNoChange = true;
 			// This message should stay in english!
 			MessageBox (NULL, _T("Your language pack will not work with this version. Please download a compatible one from the MPC-HC homepage."), 
-							  _T("Media Player Classic - Homecinema"), MB_OK);
+							  _T("Media Player Classic - Home Cinema"), MB_OK);
 		}
 	}
 
@@ -3215,4 +3230,10 @@ void CMPlayerCApp::RunAsAdministrator(LPCTSTR strCommand, LPCTSTR strArgs, bool 
 
 	if (bWaitProcess)
 		WaitForSingleObject(execinfo.hProcess, INFINITE);
+}
+
+void CAboutDlg::OnHomepage(NMHDR *pNMHDR, LRESULT *pResult)
+{
+	ShellExecute(m_hWnd, _T("open"), _T("http://mpc-hc.sourceforge.net/about-homepage.html"), NULL, NULL, SW_SHOWDEFAULT);	
+	*pResult = 0;
 }

@@ -92,6 +92,8 @@ static UINT WM_NOTIFYICON = RegisterWindowMessage(TEXT("MYWM_NOTIFYICON"));
 #include "Monitors.h"
 #include "MultiMonitor.h"
 
+DWORD last_run = 0;
+
 class CSubClock : public CUnknown, public ISubClock
 {
 	STDMETHODIMP NonDelegatingQueryInterface(REFIID riid, void** ppv)
@@ -622,7 +624,10 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 			m_shaderlabelsScreenSpace.AddTail (strRes);
 			strRes = strList.Tokenize(_T("|"),curPos);
 		}
-	}	
+	}
+
+	m_bToggleShader = AfxGetAppSettings().m_bToggleShader;
+	m_bToggleShaderScreenSpace = AfxGetAppSettings().m_bToggleShaderScreenSpace;
 	
 	m_strTitle.Format (L"%s - v%s", ResStr(IDR_MAINFRAME), AfxGetMyApp()->m_strVersion);
 	SetWindowText(m_strTitle);
@@ -685,6 +690,9 @@ void CMainFrame::OnClose()
 		}
 		AfxGetAppSettings().strShaderListScreenSpace = strList;
 	}
+
+	AfxGetAppSettings().m_bToggleShader = m_bToggleShader;
+	AfxGetAppSettings().m_bToggleShaderScreenSpace = m_bToggleShaderScreenSpace;
 
 	m_wndPlaylistBar.SavePlaylist();
 
@@ -2175,6 +2183,7 @@ LRESULT CMainFrame::OnGraphNotify(WPARAM wParam, LPARAM lParam)
 
 			m_wndSeekBar.SetPos(rtNow);
 			m_OSD.SetPos(rtNow);
+			m_Lcd.SetMediaPos(rtNow);
 
 			if(m_pSubClock) m_pSubClock->SetTime(rtNow);
 		}
@@ -3564,9 +3573,11 @@ BOOL CMainFrame::OnCopyData(CWnd* pWnd, COPYDATASTRUCT* pCDS)
 		ProcessAPICommand(pCDS);
 		return TRUE;
 	}
-
+	
+	/*
 	if(m_iMediaLoadState == MLS_LOADING || !IsWindow(m_wndPlaylistBar))
 		return FALSE;
+	*/
 
 	if(pCDS->dwData != 0x6ABE51 || pCDS->cbData < sizeof(DWORD))
 		return FALSE;
@@ -3584,7 +3595,6 @@ BOOL CMainFrame::OnCopyData(CWnd* pWnd, COPYDATASTRUCT* pCDS)
 		pBuff++;
 		cmdln.AddTail(str);
 	}
-
 
 	s.ParseCommandLine(cmdln);
 
@@ -3692,6 +3702,9 @@ BOOL CMainFrame::OnCopyData(CWnd* pWnd, COPYDATASTRUCT* pCDS)
 		sl.AddTailList(&s.slFiles);
 		if(!fMulti) sl.AddTailList(&s.slDubs);
 
+		if(last_run && ((GetTickCount()-last_run)<500)) s.nCLSwitches |= CLSW_ADD;
+		last_run = GetTickCount();
+
 		if((s.nCLSwitches&CLSW_ADD) && m_wndPlaylistBar.GetCount() > 0)
 		{
 			m_wndPlaylistBar.Append(sl, fMulti, &s.slSubs);
@@ -3785,14 +3798,16 @@ void CMainFrame::OnFileOpendvd()
 	if(iil = SHBrowseForFolder(&bi))
 	{
 		CHdmvClipInfo		ClipInfo;
-		CAtlList<CString>	MainPlaylist;
+		CString				strPlaylistFile;
+		CAtlList<CHdmvClipInfo::PlaylistItem>	MainPlaylist;
 		SHGetPathFromIDList(iil, path);
 		s.sDVDPath = path;
 
-		if (SUCCEEDED (ClipInfo.FindMainMovie (path, MainPlaylist)))
+		if (SUCCEEDED (ClipInfo.FindMainMovie (path, strPlaylistFile, MainPlaylist)))
 		{
-			m_wndPlaylistBar.Open(MainPlaylist, MainPlaylist.GetCount()>1);
-			OpenCurPlaylistItem();
+			CAutoPtr<OpenFileData> p(DNew OpenFileData());
+			p->fns.AddTail(strPlaylistFile);
+			OpenMedia(p);
 		}
 		else
 		{
@@ -5899,7 +5914,7 @@ void CMainFrame::OnPlayPauseI()
 {
 	if(m_iMediaLoadState == MLS_LOADED)
 	{
-		SetAlwaysOnTop(AfxGetAppSettings().iOnTop);
+		//SetAlwaysOnTop(AfxGetAppSettings().iOnTop);
 
 		if(m_iPlaybackMode == PM_FILE)
 		{
@@ -5917,6 +5932,8 @@ void CMainFrame::OnPlayPauseI()
 		SetTimer(TIMER_STREAMPOSPOLLER, 40, NULL);
 		SetTimer(TIMER_STREAMPOSPOLLER2, 500, NULL);
 		SetTimer(TIMER_STATS, 1000, NULL);
+
+		SetAlwaysOnTop(AfxGetAppSettings().iOnTop);
 	}
 
 	MoveVideoWindow();

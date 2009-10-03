@@ -1,12 +1,12 @@
-;the revision number - 2009-07-22 13:36
+ï»¿;the revision number - 2009-07-22 13:36
 
 #include "../include/Version.h"
 
 #define MyAppName "Media Player Classic - Home Cinema x64"
 #define MyAppVerName "Media Player Classic - Home Cinema v."
 #define MyAppURL "http://mpc-hc.sourceforge.net/"
-#define MyAppExeName "mplayerc64.exe"
-#define MyAppININame "\mplayerc64.ini"
+#define MyAppExeName "mpc-hc64.exe"
+#define MyAppININame "\mpc-hc64.ini"
 #define MyDateTimeString GetDateTimeString('yyyymmddhhnnss', '', '');
 
 [Setup]
@@ -34,7 +34,7 @@ ArchitecturesInstallIn64BitMode=x64
 ShowUndisplayableLanguages=true
 
 [Files]
-Source: ..\src\apps\mplayerc\x64\Release Unicode\mplayerc64.exe; DestDir: {app}; Flags: ignoreversion 64bit
+Source: ..\src\apps\mplayerc\x64\Release Unicode\mpc-hc64.exe; DestDir: {app}; Flags: ignoreversion 64bit
 Source: ..\src\apps\mplayerc\x64\Release Unicode\mpcresources.br.dll; DestDir: {app}; Flags: ignoreversion 64bit
 Source: ..\src\apps\mplayerc\x64\Release Unicode\mpcresources.by.dll; DestDir: {app}; Flags: ignoreversion 64bit
 Source: ..\src\apps\mplayerc\x64\Release Unicode\mpcresources.cz.dll; DestDir: {app}; Flags: ignoreversion 64bit
@@ -68,10 +68,9 @@ Name: {group}\{cm:UninstallProgram,{#MyAppName}}; Filename: {uninstallexe}
 Name: {commondesktop}\{#MyAppName}; Filename: {app}\{#MyAppExeName}; Tasks: desktopicon
 Name: {userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}; Filename: {app}\{#MyAppExeName}; Tasks: quicklaunchicon
 
-
 [Languages]
 Name: en; MessagesFile: compiler:Default.isl
-Name: br; MessagesFile: compiler:Languages\BrazilianPortuguese.isl
+Name: br; MessagesFile: Languages\BrazilianPortuguese.isl
 Name: by; MessagesFile: Languages\Belarus.isl
 Name: cz; MessagesFile: compiler:Languages\Czech.isl
 Name: es; MessagesFile: compiler:Languages\Spanish.isl
@@ -93,18 +92,25 @@ Name: tr; MessagesFile: Languages\Turkish.isl
 Name: ua; MessagesFile: Languages\Ukrainian.isl
 
 [CustomMessages]
-en.Save_set_mpc=To save the old program settings
-cz.Save_set_mpc=Ulozit stare nastaveni programu
-fi.Save_set_mpc=Tallenna vanhan ohjelman asetuksia
-fr.Save_set_mpc=Sauver l'ancien programme de reglages
-de.Save_set_mpc=Alte Abstimmungen des Programms zu behalten
-hu.Save_set_mpc=To save the old program settings
-it.Save_set_mpc=Salvare il vecchio impostazioni del programma
-no.Save_set_mpc=Lagre den gamle programmet innstillinger
-pl.Save_set_mpc=Zachowac stare nastrajania programu
-pt.Save_set_mpc=Salve o programa antigo configuracoes
-ru.Save_set_mpc=Ñîõğàíèòü ñòàğûå íàñòğîéêè ïğîãğàììû
-es.Save_set_mpc=Salvar el viejo programa de configuracion
+en.Save_set_mpc=Keep previous settings
+br.Save_set_mpc=Manter ajustes anteriores
+by.Save_set_mpc=Ğ—Ğ°Ñ…Ğ°Ğ²Ğ°Ñ†ÑŒ Ğ¿Ğ°Ğ¿ÑÑ€ÑĞ´Ğ½iÑ Ğ½Ğ°Ğ»Ğ°Ğ´Ñ‹
+cz.Save_set_mpc=Zachovat pÅ¯vodnÃ­ nastavenÃ­
+de.Save_set_mpc=Die vorherigen Einstellungen behalten
+es.Save_set_mpc=Keep previous settings
+fr.Save_set_mpc=Conserver les rÃ©glages prÃ©cÃ©dents
+hu.Save_set_mpc=Keep previous settings
+it.Save_set_mpc=Mantieni le impostazioni precedenti
+kr.Save_set_mpc=ì´ì „ ì„¤ì • ìœ ì§€
+pl.Save_set_mpc=Zachowaj poprzednie ustawienia
+pt.Save_set_mpc=Keep previous settings
+ru.Save_set_mpc=Keep previous settings
+sc.Save_set_mpc=ä¿æŒå½“å‰é…ç½®
+se.Save_set_mpc=Keep previous settings
+sk.Save_set_mpc=ZachovaÅ¥ predchÃ¡dzajÃºce nastavenia
+tc.Save_set_mpc=ä¿ç•™å…ˆå‰çš„è¨­å®š
+tr.Save_set_mpc=Ã–nceki ayarlarÄ± kullan
+ua.Save_set_mpc=Keep previous settings
 
 en.langid=00000000
 br.langid=00000017
@@ -125,6 +131,7 @@ sk.langid=00000012
 tc.langid=00000014
 tr.langid=00000004
 ua.langid=00000010
+
 
 [Tasks]
 Name: desktopicon; Description: {cm:CreateDesktopIcon}; GroupDescription: {cm:AdditionalIcons}; Flags: checkedonce
@@ -152,6 +159,7 @@ begin
     begin
         if IsTaskSelected('uninstallable_set') = False then
         begin
+
             BackupRegistry();
             renamefile (ExpandConstant('{app}\' + '{#MyAppININame}'), ExpandConstant('{app}\' + '{#MyAppININame}' + '{#MyDateTimeString}' + '.bak'));
             RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Gabest\');
@@ -163,4 +171,8 @@ begin
 		SetIniInt('Settings', 'InterfaceLanguage', lang, ExpandConstant('{app}\' + '{#MyAppININame}'))
 		else
 		RegWriteDWordValue(HKCU, 'Software\Gabest\Media Player Classic\Settings', 'InterfaceLanguage', lang);
+    // rename binary from previous installer
+    renamefile (ExpandConstant('{app}\' + 'mplayerc64.exe'), ExpandConstant('{app}\' + 'mplayerc64.exe.bak'));
 end;
+
+

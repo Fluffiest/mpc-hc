@@ -188,7 +188,7 @@ void CMediaFormats::UpdateData(bool fSave)
 		ADDFMT((ResStr(IDS_MEDIAFORMATS_1),   _T("wma"), true));
 		ADDFMT((ResStr(IDS_AG_VIDEO_FILE),    _T("avi")));
 		ADDFMT((ResStr(IDS_AG_AUDIO_FILE),    _T("wav"), true));
-		ADDFMT((ResStr(IDS_MEDIAFORMATS_4),   _T("mpg mpeg mpe m1v m2v mpv2 mp2v ts tp tpr pva m2ts m2t mts evo m2p")));
+		ADDFMT((ResStr(IDS_MEDIAFORMATS_4),   _T("mpg mpeg mpe m1v m2v mpv2 mp2v ts tp tpr pva m2ts m2t mts evo m2p mpls")));
 		ADDFMT((ResStr(IDS_MEDIAFORMATS_5),   _T("mpa mp2 m1a m2a"), true));
 		ADDFMT((ResStr(IDS_AG_DVD_FILE),      _T("vob ifo")));
 		ADDFMT((ResStr(IDS_MEDIAFORMATS_7),   _T("ac3 dts"), true));
@@ -222,7 +222,7 @@ void CMediaFormats::UpdateData(bool fSave)
 		ADDFMT((_T("Monkey's Audio file"),    _T("ape apl"), true));
 		ADDFMT((_T("True Audio file"),        _T("tta"), true));
 		ADDFMT((_T("AMR Audio file"),         _T("amr"), true));
-		ADDFMT((ResStr(IDS_MEDIAFORMATS_28),  _T("flv")));
+		ADDFMT((ResStr(IDS_MEDIAFORMATS_28),  _T("flv iflv f4v")));
 		ADDFMT((ResStr(IDS_MEDIAFORMATS_29),  _T("swf"), false, _T("ShockWave ActiveX control"), ShockWave));
 		ADDFMT((ResStr(IDS_MEDIAFORMATS_30),  _T("mov 3g2 3gp2"), false, _T("QuickTime (Alternative)"), QuickTime));
 		ADDFMT((ResStr(IDS_AG_PLAYLIST_FILE), _T("asx m3u pls wvx wax wmx mpcpl bdmv")));

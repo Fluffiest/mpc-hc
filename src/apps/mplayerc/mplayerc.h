@@ -229,7 +229,8 @@ enum
 	TRA_VORBIS = TRA_DIRAC<<1,
 	TRA_FLAC   = TRA_VORBIS<<1,
 	TRA_NELLY  = TRA_FLAC<<1,
-	TRA_LAST   = TRA_NELLY<<1
+	TRA_AMR    = TRA_NELLY<<1,
+	TRA_LAST   = TRA_AMR<<1
 };
 
 enum
@@ -724,6 +725,8 @@ public:
 		float			dSaturation;
 		CString			strShaderList;
 		CString			strShaderListScreenSpace;
+		bool			m_bToggleShader;
+		bool			m_bToggleShaderScreenSpace;
 
 		bool			fRememberDVDPos;
 		bool			fRememberFilePos;

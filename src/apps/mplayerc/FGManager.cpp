@@ -1430,6 +1430,8 @@ CFGManagerCustom::CFGManagerCustom(LPCTSTR pName, LPUNKNOWN pUnk)
 		pFGF->m_chkbytes.AddTail(_T("4,1,,47,196,1,,47,388,1,,47"));
 		pFGF->m_chkbytes.AddTail(_T("0,4,,54467263,1660,1,,47"));
 		pFGF->m_chkbytes.AddTail(_T("0,8,fffffc00ffe00000,4156000055000000"));
+		pFGF->m_chkbytes.AddTail(_T("0,8,,4D504C5330323030"));	// MPLS0200
+		pFGF->m_chkbytes.AddTail(_T("0,8,,4D504C5330313030"));	// MPLS0100
 		m_source.AddTail(pFGF);
 	}
 #endif
@@ -1668,6 +1670,16 @@ CFGManagerCustom::CFGManagerCustom(LPCTSTR pName, LPUNKNOWN pUnk)
 	pFGF->AddType(MEDIATYPE_MPEG2_PACK, MEDIASUBTYPE_MPEG2_AUDIO);
 	pFGF->AddType(MEDIATYPE_MPEG2_PES, MEDIASUBTYPE_MPEG2_AUDIO);
 	pFGF->AddType(MEDIATYPE_Audio, MEDIASUBTYPE_MPEG2_AUDIO);
+	m_transform.AddTail(pFGF);
+#endif
+
+#if INTERNAL_DECODER_AMR
+	pFGF = new CFGFilterInternal<CMpaDecFilter>(
+		(tra & TRA_AMR) ? L"AMR Audio Decoder" : L"AMR Audio Decoder (low merit)",
+		(tra & TRA_AMR) ? MERIT64_ABOVE_DSHOW : MERIT64_DO_USE);
+	pFGF->AddType(MEDIATYPE_Audio, MEDIASUBTYPE_SAMR);
+	pFGF->AddType(MEDIATYPE_Audio, MEDIASUBTYPE_AMR);
+	pFGF->AddType(MEDIATYPE_Audio, MEDIASUBTYPE_SAWB);
 	m_transform.AddTail(pFGF);
 #endif
 
@@ -1985,6 +1997,8 @@ CFGManagerCustom::CFGManagerCustom(LPCTSTR pName, LPUNKNOWN pUnk)
 	{
 		pFGF->AddType(MEDIATYPE_Video, MEDIASUBTYPE_H263);
 		pFGF->AddType(MEDIATYPE_Video, MEDIASUBTYPE_h263);
+		pFGF->AddType(MEDIATYPE_Video, MEDIASUBTYPE_S263);
+		pFGF->AddType(MEDIATYPE_Video, MEDIASUBTYPE_s263);
 	}
 #endif
 #if INTERNAL_DECODER_THEORA
