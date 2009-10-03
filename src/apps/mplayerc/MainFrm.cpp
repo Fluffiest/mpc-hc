@@ -5072,7 +5072,7 @@ void CMainFrame::OnUpdateViewEnableFrameTimeCorrection(CCmdUI* pCmdUI)
 void CMainFrame::OnUpdateViewVSyncOffsetIncrease(CCmdUI* pCmdUI)
 {
 	AppSettings& s = AfxGetAppSettings();
-	bool supported = ((s.iDSVideoRendererType == VIDRNDT_DS_EVR_CUSTOM || s.iDSVideoRendererType == VIDRNDT_DS_VMR9RENDERLESS) && s.iAPSurfaceUsage == VIDRNDT_AP_TEXTURE3D) && s.m_RenderSettings.fVMR9AlterativeVSync;
+	bool supported = ((s.iDSVideoRendererType == VIDRNDT_DS_EVR_CUSTOM || s.iDSVideoRendererType == VIDRNDT_DS_VMR9RENDERLESS));
 
 	pCmdUI->Enable (supported);
 }
@@ -5080,7 +5080,7 @@ void CMainFrame::OnUpdateViewVSyncOffsetIncrease(CCmdUI* pCmdUI)
 void CMainFrame::OnUpdateViewVSyncOffsetDecrease(CCmdUI* pCmdUI)
 {
 	AppSettings& s = AfxGetAppSettings();
-	bool supported = ((s.iDSVideoRendererType == VIDRNDT_DS_EVR_CUSTOM || s.iDSVideoRendererType == VIDRNDT_DS_VMR9RENDERLESS) && s.iAPSurfaceUsage == VIDRNDT_AP_TEXTURE3D) && s.m_RenderSettings.fVMR9AlterativeVSync;
+	bool supported = ((s.iDSVideoRendererType == VIDRNDT_DS_EVR_CUSTOM || s.iDSVideoRendererType == VIDRNDT_DS_VMR9RENDERLESS));
 
 	pCmdUI->Enable (supported);
 }
@@ -5296,9 +5296,10 @@ void CMainFrame::OnViewVSyncOffsetIncrease()
 {
 	AppSettings& s = AfxGetAppSettings();
 	++s.m_RenderSettings.iVMR9VSyncOffset;
+	s.m_RenderSettings.fTargetSyncOffset = s.m_RenderSettings.fTargetSyncOffset - 1.0;
 	s.UpdateData(true);
 	CString Format;
-	Format.Format(L"VSync Offset: %d", s.m_RenderSettings.iVMR9VSyncOffset);
+	Format.Format(L"VSync Offset: %1.f", s.m_RenderSettings.fTargetSyncOffset);
 	m_OSD.DisplayMessage (OSD_TOPRIGHT, Format);
 }
 
@@ -5306,9 +5307,10 @@ void CMainFrame::OnViewVSyncOffsetDecrease()
 {
 	AppSettings& s = AfxGetAppSettings();
 	--s.m_RenderSettings.iVMR9VSyncOffset;
+	s.m_RenderSettings.fTargetSyncOffset = s.m_RenderSettings.fTargetSyncOffset + 1.0;
 	s.UpdateData(true);
 	CString Format;
-	Format.Format(L"VSync Offset: %d", s.m_RenderSettings.iVMR9VSyncOffset);
+	Format.Format(L"VSync Offset: %1.f", s.m_RenderSettings.fTargetSyncOffset);
 	m_OSD.DisplayMessage (OSD_TOPRIGHT, Format);
 }
 

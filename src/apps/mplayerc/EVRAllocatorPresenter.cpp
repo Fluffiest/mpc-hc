@@ -401,6 +401,8 @@ private:
 	bool m_bEvtQuit;
 	HANDLE m_hEvtFlush; // Discard all buffers
 	bool m_bEvtFlush;
+	HANDLE m_hEvtSkip; // Skip frame
+	bool m_bEvtSkip;
 
 	bool m_bUseInternalTimer;
 	int32 m_LastSetOutputRange;
@@ -411,6 +413,7 @@ private:
 	HANDLE m_hRenderThread;
 	HANDLE m_hMixerThread;
 	RENDER_STATE m_nRenderState;
+	bool m_bStepping;
 	
 	CCritSec m_SampleQueueLock;
 	CCritSec m_ImageProcessingLock;
@@ -457,7 +460,7 @@ private:
 	PTR_AvRevertMmThreadCharacteristics pfAvRevertMmThreadCharacteristics;
 };
 
-HRESULT STDMETHODCALLTYPE COuterEVR::GetState( DWORD dwMilliSecsTimeout, __out  FILTER_STATE *State)
+HRESULT STDMETHODCALLTYPE COuterEVR::GetState(DWORD dwMilliSecsTimeout, __out  FILTER_STATE *State)
 {
 	HRESULT ReturnValue;
 	CComPtr<IBaseFilter> pEVRBase;
@@ -603,11 +606,12 @@ CEVRAllocatorPresenter::CEVRAllocatorPresenter(HWND hWnd, HRESULT& hr, CString &
 
 	// Bufferize frame only with 3D texture
 	if (s.iAPSurfaceUsage == VIDRNDT_AP_TEXTURE3D)
-		m_nDXSurface	= max (min (s.iEvrBuffers, MAX_PICTURE_SLOTS-2), 4);
+		m_nDXSurface = max(min (s.iEvrBuffers, MAX_PICTURE_SLOTS-2), 4);
 	else
 		m_nDXSurface = 1;
 
 	m_nRenderState = Shutdown;
+	m_bStepping = false;
 	m_bUseInternalTimer = false;
 	m_LastSetOutputRange = -1;
 	m_bPendingRenegotiate = false;
@@ -643,6 +647,7 @@ void CEVRAllocatorPresenter::StartWorkerThreads()
 	{
 		m_hEvtQuit = CreateEvent(NULL, TRUE, FALSE, NULL);
 		m_hEvtFlush = CreateEvent(NULL, TRUE, FALSE, NULL);
+		m_hEvtSkip = CreateEvent(NULL, TRUE, FALSE, NULL);
 		m_hMixerThread = ::CreateThread(NULL, 0, MixerThreadStatic, (LPVOID)this, 0, &dwThreadId);
 		SetThreadPriority(m_hMixerThread, THREAD_PRIORITY_HIGHEST);
 		m_hRenderThread = ::CreateThread(NULL, 0, RenderThreadStatic, (LPVOID)this, 0, &dwThreadId);
@@ -655,10 +660,12 @@ void CEVRAllocatorPresenter::StopWorkerThreads()
 {
 	if (m_nRenderState != Shutdown)
 	{
-		SetEvent (m_hEvtFlush);
+		SetEvent(m_hEvtFlush);
 		m_bEvtFlush = true;
-		SetEvent (m_hEvtQuit);
+		SetEvent(m_hEvtQuit);
 		m_bEvtQuit = true;
+		SetEvent(m_hEvtSkip);
+		m_bEvtSkip = true;
 		if ((m_hRenderThread != INVALID_HANDLE_VALUE) && (WaitForSingleObject (m_hRenderThread, 10000) == WAIT_TIMEOUT))
 		{
 			ASSERT (FALSE);
@@ -672,11 +679,13 @@ void CEVRAllocatorPresenter::StopWorkerThreads()
 		}
 		if (m_hMixerThread != INVALID_HANDLE_VALUE) CloseHandle (m_hMixerThread);
 
-		if (m_hEvtFlush != INVALID_HANDLE_VALUE) CloseHandle (m_hEvtFlush);
-		if (m_hEvtQuit != INVALID_HANDLE_VALUE) CloseHandle (m_hEvtQuit);
+		if (m_hEvtFlush != INVALID_HANDLE_VALUE) CloseHandle(m_hEvtFlush);
+		if (m_hEvtQuit != INVALID_HANDLE_VALUE) CloseHandle(m_hEvtQuit);
+		if (m_hEvtSkip != INVALID_HANDLE_VALUE) CloseHandle(m_hEvtSkip);
 
 		m_bEvtFlush = false;
 		m_bEvtQuit = false;
+		m_bEvtSkip = false;
 	}
 	m_nRenderState = Shutdown;
 }
@@ -792,6 +801,7 @@ STDMETHODIMP CEVRAllocatorPresenter::OnClockSetRate(MFTIME hnsSystemTime, float 
 // IBaseFilter delegate
 bool CEVRAllocatorPresenter::GetState(DWORD dwMilliSecsTimeout, FILTER_STATE *State, HRESULT &_ReturnValue)
 {
+	CAutoLock lock(&m_SampleQueueLock);
 	switch(m_nRenderState)
 	{
 		case Started: *State = State_Running; break;
@@ -946,33 +956,40 @@ STDMETHODIMP CEVRAllocatorPresenter::ProcessMessage(MFVP_MESSAGE_TYPE eMessage, 
 
 	switch (eMessage)
 	{
-	case MFVP_MESSAGE_BEGINSTREAMING : // The EVR switched from stopped to paused. The presenter should allocate resources
+	case MFVP_MESSAGE_BEGINSTREAMING:
+		//_tprintf(_T("MFVP_MESSAGE_BEGINSTREAMING\n"));
 		hr = BeginStreaming();
 		m_llHysteresis = 0;
+		m_lShiftToNearest = 0;
+		m_bStepping = false;
 		break;
 
 	case MFVP_MESSAGE_CANCELSTEP:
-		CompleteFrameStep (true);
+		//_tprintf(_T("MFVP_MESSAGE_CANCELSTEP\n"));
+		m_bStepping = false;
+		CompleteFrameStep(true);
 		break;
 
-	case MFVP_MESSAGE_ENDOFSTREAM : 
+	case MFVP_MESSAGE_ENDOFSTREAM: 
 		m_bPendingMediaFinished = true;
 		break;
 
-	case MFVP_MESSAGE_ENDSTREAMING :
+	case MFVP_MESSAGE_ENDSTREAMING:
 		{
 			m_pGenlock->ResetTiming();
 			m_pRefClock = NULL;
 		}
 		break;
 
-	case MFVP_MESSAGE_FLUSH :
+	case MFVP_MESSAGE_FLUSH:
+		//_tprintf(_T("MFVP_MESSAGE_FLUSH\n"));
 		SetEvent(m_hEvtFlush);
 		m_bEvtFlush = true;
 		while (WaitForSingleObject(m_hEvtFlush, 1) == WAIT_OBJECT_0);
 		break;
 
 	case MFVP_MESSAGE_INVALIDATEMEDIATYPE:
+		//_tprintf(_T("MFVP_MESSAGE_INVALIDATEMEDIATYPE\n"));
 		m_bPendingRenegotiate = true;
 		while (*((volatile bool *)&m_bPendingRenegotiate)) Sleep(1);
 		break;
@@ -982,10 +999,12 @@ STDMETHODIMP CEVRAllocatorPresenter::ProcessMessage(MFVP_MESSAGE_TYPE eMessage, 
 
 	case MFVP_MESSAGE_STEP:
 		m_nStepCount = ulParam;
-		hr = S_OK;
+		//_tprintf(_T("MFVP_MESSAGE_STEP: %d\n"), m_nStepCount);
+		m_bStepping = true;
 		break;
 
 	default :
+		//_tprintf(_T("Illegal message\n"));
 		ASSERT(FALSE);
 		break;
 	}
@@ -1238,52 +1257,61 @@ bool CEVRAllocatorPresenter::GetSampleFromMixer()
 	MFT_OUTPUT_DATA_BUFFER Buffer;
 	HRESULT hr = S_OK;
 	DWORD dwStatus;
+	LONGLONG llClockBefore = 0;
+	LONGLONG llClockAfter  = 0;
+	LONGLONG llMixerLatency;
+
 	UINT dwSurface;
 	bool newSample = false;
 
-	while (hr == S_OK) // Get as many frames as there are and that we have samples for
+	while(SUCCEEDED(hr)) // Get as many frames as there are and that we have samples for
     {
 		CComPtr<IMFSample> pSample;
+		CComPtr<IMFSample> pNewSample;
 		if (FAILED(GetFreeSample(&pSample))) // All samples are taken for the moment. Better luck next time
 		{
-			hr = E_FAIL;
 			break;
 		}
-		else
+
+		memset(&Buffer, 0, sizeof(Buffer));
+		Buffer.pSample = pSample;
+		pSample->GetUINT32(GUID_SURFACE_INDEX, &dwSurface);
 		{
-			memset(&Buffer, 0, sizeof(Buffer));
-			Buffer.pSample = pSample;
-			pSample->GetUINT32(GUID_SURFACE_INDEX, &dwSurface);
+			llClockBefore = AfxGetMyApp()->GetPerfCounter();
 			hr = m_pMixer->ProcessOutput(0 , 1, &Buffer, &dwStatus);
-
-			if (hr == MF_E_TRANSFORM_NEED_MORE_INPUT) // There are no samples left in the mixer
-			{
-				MoveToFreeList(pSample, false);
-				break;
-			}
-			else
-			{
-				newSample = true;
-				if (AfxGetMyApp()->m_fTearingTest)
-				{
-					RECT rcTearing;
-
-					rcTearing.left = m_nTearingPos;
-					rcTearing.top = 0;
-					rcTearing.right	= rcTearing.left + 4;
-					rcTearing.bottom = m_NativeVideoSize.cy;
-					m_pD3DDev->ColorFill(m_pVideoSurface[dwSurface], &rcTearing, D3DCOLOR_ARGB (255,255,0,0));
-
-					rcTearing.left = (rcTearing.right + 15) % m_NativeVideoSize.cx;
-					rcTearing.right	= rcTearing.left + 4;
-					m_pD3DDev->ColorFill(m_pVideoSurface[dwSurface], &rcTearing, D3DCOLOR_ARGB (255,255,0,0));
-					m_nTearingPos = (m_nTearingPos + 7) % m_NativeVideoSize.cx;
-				}	
-				MoveToScheduledList(pSample, false); // Schedule, then go back to see if there is more where that came from
-			}
+			llClockAfter = AfxGetMyApp()->GetPerfCounter();
 		}
-	}
 
+		if (hr == MF_E_TRANSFORM_NEED_MORE_INPUT) // There are no samples left in the mixer
+		{
+			MoveToFreeList(pSample, false);
+			break;
+		}
+		if (m_pSink) 
+		{
+			llMixerLatency = llClockAfter - llClockBefore;
+			m_pSink->Notify (EC_PROCESSING_LATENCY, (LONG_PTR)&llMixerLatency, 0);
+		}
+
+		newSample = true;
+
+		if (AfxGetMyApp()->m_fTearingTest)
+		{
+			RECT rcTearing;
+
+			rcTearing.left = m_nTearingPos;
+			rcTearing.top = 0;
+			rcTearing.right	= rcTearing.left + 4;
+			rcTearing.bottom = m_NativeVideoSize.cy;
+			m_pD3DDev->ColorFill(m_pVideoSurface[dwSurface], &rcTearing, D3DCOLOR_ARGB (255,255,0,0));
+
+			rcTearing.left = (rcTearing.right + 15) % m_NativeVideoSize.cx;
+			rcTearing.right	= rcTearing.left + 4;
+			m_pD3DDev->ColorFill(m_pVideoSurface[dwSurface], &rcTearing, D3DCOLOR_ARGB (255,255,0,0));
+			m_nTearingPos = (m_nTearingPos + 7) % m_NativeVideoSize.cx;
+		}
+		MoveToScheduledList(pSample, false); // Schedule, then go back to see if there is more where that came from
+	}
 	return newSample;
 }
 
@@ -1577,7 +1605,7 @@ STDMETHODIMP CEVRAllocatorPresenter::InitializeDevice(AM_MEDIA_TYPE* pMediaType)
 	HRESULT hr;
 	CAutoLock lock(this);
 	CAutoLock lock2(&m_ImageProcessingLock);
-	CAutoLock cRenderLock(&m_RenderLock);
+	CAutoLock cRenderLock(&m_allocatorLock);
 
 	RemoveAllSamples();
 	DeleteSurfaces();
@@ -1641,35 +1669,12 @@ void CEVRAllocatorPresenter::MixerThread()
 			{
 				bool bNewSample = false;
 				{
-					CAutoLock lock(&m_ImageProcessingLock);
+					CAutoLock AutoLock(&m_ImageProcessingLock);
 					bNewSample = GetSampleFromMixer();
 				}
-				if (m_rtFrameCycle == 0 && bNewSample) // Get frame time and type from the input pin				
+				if(m_bUseInternalTimer && m_pSubPicQueue)
 				{
-					CComPtr<IPin> pPin;
-					CMediaType mt;
-					if (
-						SUCCEEDED(m_pOuterEVR->FindPin(L"EVR Input0", &pPin)) &&
-						SUCCEEDED(pPin->ConnectionMediaType(&mt)))
-					{
-						ExtractAvgTimePerFrame(&mt, m_rtFrameCycle);
-						m_dFrameCycle = m_rtFrameCycle / 10000.0;
-						if (m_rtFrameCycle > 0.0)
-						{
-							m_fps = 10000000.0 / m_rtFrameCycle;
-							m_dCycleDifference = GetCycleDifference();
-							if (abs(m_dCycleDifference) < 0.05) // If less than 5%
-								m_bSnapToVSync = true;
-							else
-								m_bSnapToVSync = false;
-						}
-						m_bInterlaced = ExtractInterlaced(&mt);
-					}
-					// Update internal subtitle clock
-					if(m_bUseInternalTimer && m_pSubPicQueue)
-					{
-						m_pSubPicQueue->SetFPS(m_fps);
-					}
+					m_pSubPicQueue->SetFPS(m_fps);
 				}
 			}
 			break;
@@ -1690,16 +1695,16 @@ void CEVRAllocatorPresenter::RenderThread()
 {
 	HANDLE hAvrt;
 	DWORD dwTaskIndex = 0;
-	HANDLE hEvts[] = {m_hEvtQuit, m_hEvtFlush};
+	HANDLE hEvts[] = {m_hEvtQuit, m_hEvtFlush, m_hEvtSkip};
 	bool bQuit = false;
 	TIMECAPS tc;
 	DWORD dwResolution;
 	LONGLONG llRefClockTime;
-	double targetSyncOffset;
-	MFTIME systemTime;
+	double dTargetSyncOffset;
+	MFTIME llSystemTime;
 	DWORD dwUser = 0;
 	DWORD dwObject;
-	int samplesLeft = 0;
+	int nSamplesLeft;
 	CComPtr<IMFSample>pNewSample = NULL; // The sample next in line to be presented
 
 	// Tell Vista Multimedia Class Scheduler we are doing threaded playback (increase priority)
@@ -1707,90 +1712,134 @@ void CEVRAllocatorPresenter::RenderThread()
 	if (pfAvSetMmThreadPriority) pfAvSetMmThreadPriority (hAvrt, AVRT_PRIORITY_HIGH);
 
 	AppSettings& s = AfxGetAppSettings();
-	m_pGenlock->GetTargetSyncOffset(&targetSyncOffset); // Target sync offset from settings
 
 	// Set timer resolution
 	timeGetDevCaps(&tc, sizeof(TIMECAPS));
 	dwResolution = min(max(tc.wPeriodMin, 0), tc.wPeriodMax);
 	dwUser = timeBeginPeriod(dwResolution);
+	pNewSample = NULL;
 
 	while (!bQuit)
 	{
-		pNewSample = NULL;
-		m_lNextSampleWait = 1;
-		samplesLeft = 0;
+		m_lNextSampleWait = 1; // Default value for running this loop
+		nSamplesLeft = 0;
+		bool stepForward = false;
+		LONG lDisplayCycle = (LONG)(GetDisplayCycle());
+		LONG lDisplayCycle2 = (LONG)(GetDisplayCycle() / 2.0); // These are a couple of empirically determined constants used the control the "snap" function
+		LONG lDisplayCycle4 = (LONG)(GetDisplayCycle() / 4.0);
 
-		if (m_nRenderState == Started || !m_bPrerolled) // If either streaming or the pre-roll sample
+		AppSettings& s = AfxGetAppSettings();
+		dTargetSyncOffset = s.m_RenderSettings.fTargetSyncOffset;
+
+		if ((m_nRenderState == Started || !m_bPrerolled) && !pNewSample) // If either streaming or the pre-roll sample and no sample yet fetched
 		{
-			if (SUCCEEDED(GetScheduledSample(&pNewSample, samplesLeft))) // Get the next sample
+			if (SUCCEEDED(GetScheduledSample(&pNewSample, nSamplesLeft))) // Get the next sample
 			{
+				//_tprintf(_T("(1) next sample: "));
 				m_llLastSampleTime = m_llSampleTime;
 				if (!m_bPrerolled)
 				{
-					m_bPrerolled = true; // m_bPrerolled is a ticket to show one (1) frame and no more until streaming
+					m_bPrerolled = true; // m_bPrerolled is a ticket to show one (1) frame immediately
 					m_lNextSampleWait = 0; // Present immediately
 				}
 				else if (SUCCEEDED(pNewSample->GetSampleTime(&m_llSampleTime))) // Get zero-based sample due time
 				{
-					m_pClock->GetCorrelatedTime(0, &llRefClockTime, &systemTime); // Get zero-based reference clock time. systemTime is not used for anything here
+					//_tprintf(_T("(2) m_llSampleTime: %d\n"), (int)(m_llSampleTime / 10000));
+					m_pClock->GetCorrelatedTime(0, &llRefClockTime, &llSystemTime); // Get zero-based reference clock time. llSystemTime is not used for anything here
 					m_lNextSampleWait = (LONG)((m_llSampleTime - llRefClockTime) / 10000); // Time left until sample is due, in ms
-					if (m_lNextSampleWait < 0)
-						m_lNextSampleWait = 0; // We came too late. Race through, discard the sample and get a new one
-					else if (s.m_RenderSettings.bSynchronizeNearest) // Present at the closest "safe" occasion at tergetSyncOffset ms before vsync to avoid tearing
+					if (m_bStepping)
 					{
+						m_lNextSampleWait = 0;
+					}
+					else if (s.m_RenderSettings.bSynchronizeNearest) // Present at the closest "safe" occasion at dTargetSyncOffset ms before vsync to avoid tearing
+					{
+						if (m_lNextSampleWait < -lDisplayCycle) // We have to allow slightly negative numbers at this stage. Otherwise we get "choking" when frame rate > refresh rate
+						{
+							SetEvent(m_hEvtSkip);
+							m_bEvtSkip = true;
+						}
 						REFERENCE_TIME rtRefClockTimeNow; if (m_pRefClock) m_pRefClock->GetTime(&rtRefClockTimeNow); // Reference clock time now
-						LONG lLastVsyncTime = (LONG)((m_rtEstVSyncTime - rtRefClockTimeNow) / 10000); // Time of previous vsync relative to now
+						LONG lLastVsyncTime = (LONG)((m_llEstVBlankTime - rtRefClockTimeNow) / 10000); // Last vsync time relative to now
+						if (abs(lLastVsyncTime) > lDisplayCycle) lLastVsyncTime = - lDisplayCycle; // To even out glitches in the beginning
 
-						LONGLONG llNextSampleWait = (LONGLONG)(((double)lLastVsyncTime + GetDisplayCycle() - targetSyncOffset) * 10000); // Next safe time to Paint()
+						LONGLONG llNextSampleWait = (LONGLONG)(((double)lLastVsyncTime + GetDisplayCycle() - dTargetSyncOffset) * 10000); // Time from now util next safe time to Paint()
 						while ((llRefClockTime + llNextSampleWait) < (m_llSampleTime + m_llHysteresis)) // While the proposed time is in the past of sample presentation time
 						{
 							llNextSampleWait = llNextSampleWait + (LONGLONG)(GetDisplayCycle() * 10000); // Try the next possible time, one display cycle ahead
 						}
 						m_lNextSampleWait = (LONG)(llNextSampleWait / 10000);
-
 						m_lShiftToNearestPrev = m_lShiftToNearest;
 						m_lShiftToNearest = (LONG)((llRefClockTime + llNextSampleWait - m_llSampleTime) / 10000); // The adjustment made to get to the sweet point in time, in ms
 
+						// If m_lShiftToNearest is pushed a whole cycle into the future, then we are getting more frames
+						// than we can chew and we need to throw one away. We don't want to wait many cycles and skip many
+						// frames.
+						if (m_lShiftToNearest > (lDisplayCycle + 1))
+						{
+							SetEvent(m_hEvtSkip);
+							m_bEvtSkip = true;
+						}
+
+						// We need to add a hysteresis to the control of the timing adjustment to avoid judder when
+						// presentation time is close to vsync and the renderer couldn't otherwise make up its mind
+						// whether to present before the vsync or after. That kind of indecisiveness leads to judder.
 						if (m_bSnapToVSync)
 						{
-							LONG lDisplayCycle1 = (LONG)(GetDisplayCycle());
-							LONG lDisplayCycle2 = (LONG)(GetDisplayCycle() / 2.0); // These are a couple of empirically determined constants used the control the "snap" function
-							LONG lDisplayCycle3 = (LONG)(GetDisplayCycle() / 3.0);
-							if ((m_lShiftToNearest > -1) && (m_lShiftToNearest < (lDisplayCycle1 + 1))) // The hysteresis may experience glitches at start of stream
+
+							if ((m_lShiftToNearestPrev - m_lShiftToNearest) > lDisplayCycle2) // If a step down in the m_lShiftToNearest function. Display slower than video. 
 							{
-								if ((m_lShiftToNearestPrev - m_lShiftToNearest) > lDisplayCycle2) // If a step down in the m_lShiftToNearest function. Display slower than video. 
-								{
-									m_bVideoSlowerThanDisplay = false;
-									m_llHysteresis = -(LONGLONG)(10000 * lDisplayCycle3);
-								}
-								else if ((m_lShiftToNearest - m_lShiftToNearestPrev) > lDisplayCycle2) // If a step up
-								{
-									m_bVideoSlowerThanDisplay = true;
-									m_llHysteresis = (LONGLONG)(10000 * lDisplayCycle3);
-								}
-								else if ((m_lShiftToNearest < (2 * lDisplayCycle3)) && (m_lShiftToNearest > lDisplayCycle3))
-									m_llHysteresis = 0; // Reset when between 1/3 and 2/3 of the way either way
+								m_bVideoSlowerThanDisplay = false;
+								m_llHysteresis = -(LONGLONG)(10000 * lDisplayCycle4);
 							}
-							else
-								m_llHysteresis = 0;
+							else if ((m_lShiftToNearest - m_lShiftToNearestPrev) > lDisplayCycle2) // If a step up
+							{
+								m_bVideoSlowerThanDisplay = true;
+								m_llHysteresis = (LONGLONG)(10000 * lDisplayCycle4);
+							}
+							else if ((m_lShiftToNearest < (3 * lDisplayCycle4)) && (m_lShiftToNearest > lDisplayCycle4))
+								m_llHysteresis = 0; // Reset when between 1/4 and 3/4 of the way either way
+
+							if ((m_lShiftToNearest < lDisplayCycle2) && (m_llHysteresis > 0)) m_llHysteresis = 0; // Should never really be in this territory.
+							if ((m_lShiftToNearest > lDisplayCycle2) && (m_llHysteresis < 0)) m_llHysteresis = 0;
 						}
+					}
+
+					if (m_lNextSampleWait < 0) // Skip late sample.
+					{
+						SetEvent(m_hEvtSkip);
+						m_bEvtSkip = true;
+					}
+
+					if (m_lNextSampleWait > 1000)
+					{
+						m_lNextSampleWait = 1000; // So as to avoid full a full stop when sample is far in the future (shouldn't really happen).
 					}
 				}
 			}
 		}
-		// Wait for the next presentation time or a quit or flush event
+		// Wait for the next presentation time (m_lNextSampleWait) or some other event.
 		dwObject = WaitForMultipleObjects(countof(hEvts), hEvts, FALSE, (DWORD)m_lNextSampleWait); 
 		switch (dwObject)
 		{
-		case WAIT_OBJECT_0: // Quit event
+		case WAIT_OBJECT_0: // Quit
 			bQuit = true;
 			break;
 
-		case WAIT_OBJECT_0 + 1: // Flush event
+		case WAIT_OBJECT_0 + 1: // Flush
 			FlushSamples();
 			m_bEvtFlush = false;
 			ResetEvent(m_hEvtFlush);
 			m_bPrerolled = false;
+			m_lShiftToNearest = 0;
+			stepForward = true;
+			break;
+
+		case WAIT_OBJECT_0 + 2: // Skip sample
+			m_pcFramesDropped++;
+			m_llSampleTime = m_llLastSampleTime; // This sample will never be shown
+			m_bEvtSkip = false;
+			ResetEvent(m_hEvtSkip);
+			stepForward = true;
 			break;
 
 		case WAIT_TIMEOUT: // Time to show the sample or something
@@ -1806,7 +1855,7 @@ void CEVRAllocatorPresenter::RenderThread()
 				m_bPendingResetDevice = false;
 				CAutoLock lock(this);
 				CAutoLock lock2(&m_ImageProcessingLock);
-				CAutoLock cRenderLock(&m_RenderLock);
+				CAutoLock cRenderLock(&m_allocatorLock);
 				if (pNewSample) MoveToFreeList(pNewSample, true);
 				pNewSample = NULL;
 				RemoveAllSamples();
@@ -1828,26 +1877,40 @@ void CEVRAllocatorPresenter::RenderThread()
 			{
 				m_nStepCount = 0;
 				m_pcFramesDropped++;
+				stepForward = true;
 			}
-			else if ((m_nStepCount > 0) && pNewSample)
+			else if (pNewSample && (m_nStepCount > 0))
 			{
+				//_tprintf(_T("Stepping: %d, %d\n"), (int)(m_llSampleTime / 10000), m_nStepCount);
 				pNewSample->GetUINT32(GUID_SURFACE_INDEX, (UINT32 *)&m_nCurSurface);
 				if (!g_bExternalSubtitleTime) __super::SetTime (g_tSegmentStart + m_llSampleTime);
 				Paint(true);
 				CompleteFrameStep(false);
+				m_pcFramesDrawn++;
+				stepForward = true;
 			}
-			else if (pNewSample)
+			else if (pNewSample && !m_bStepping) // When a stepped frame is shown, a new one is fetched that we don't want to show here while stepping
 			{
+				//_tprintf(_T("Not stepping: %d\n"), (int)(m_llSampleTime / 10000));
 				pNewSample->GetUINT32(GUID_SURFACE_INDEX, (UINT32*)&m_nCurSurface);
 				if (!g_bExternalSubtitleTime) __super::SetTime (g_tSegmentStart + m_llSampleTime);
 				Paint(true);
 				m_pcFramesDrawn++;
+				stepForward = true;
 			}
 			break;
 		} // switch
-		if (pNewSample) MoveToFreeList(pNewSample, true);
-		pNewSample = NULL;
+		if (pNewSample && stepForward)
+		{
+			MoveToFreeList(pNewSample, true);
+			pNewSample = NULL;
+		}
 	} // while
+	if (pNewSample)
+	{
+		MoveToFreeList(pNewSample, true);
+		pNewSample = NULL;
+	}
 	timeEndPeriod (dwResolution);
 	if (pfAvRevertMmThreadCharacteristics) pfAvRevertMmThreadCharacteristics(hAvrt);
 }
@@ -1857,7 +1920,6 @@ void CEVRAllocatorPresenter::OnResetDevice()
 	HRESULT hr;
 	hr = m_pD3DManager->ResetDevice(m_pD3DDev, m_nResetToken);
 	if (m_pSink) m_pSink->Notify(EC_DISPLAY_CHANGED, 0, 0);
-	
 }
 
 void CEVRAllocatorPresenter::RemoveAllSamples()
@@ -1948,7 +2010,6 @@ void CEVRAllocatorPresenter::FlushSamplesInternal()
 		CComPtr<IMFSample> pMFSample;
 		pMFSample = m_ScheduledSamples.RemoveHead();
 		MoveToFreeList(pMFSample, true);
-		TRACE(_T("--- m_ScheduledSamples.GetCount: %d\n"), m_ScheduledSamples.GetCount());
 	}
 }
 
@@ -1981,7 +2042,7 @@ HRESULT CEVRAllocatorPresenter::BeginStreaming()
 
 	ResetStats();
 	EstimateRefreshTimings();
-	if (m_rtFrameCycle > 0.0) m_dCycleDifference = GetCycleDifference(); // Might have moved to another display
+	if (m_dFrameCycle > 0.0) m_dCycleDifference = GetCycleDifference(); // Might have moved to another display
 
 	return S_OK;
 }

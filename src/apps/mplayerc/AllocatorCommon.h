@@ -123,9 +123,9 @@ namespace DSObjects
 		HRESULT SetMonitor(UINT mon); // Set the number of the monitor to synchronize
 		HRESULT ResetStats(); // Reset timing statistics
 
-		HRESULT ControlDisplay(double syncOffset); // Adjust the frequency of the display if needed
-		HRESULT ControlClock(double syncOffset); // Adjust the frequency of the clock if needed
-		HRESULT UpdateStats(double syncOffset); // Don't adjust anything, just update the syncOffset stats
+		HRESULT ControlDisplay(double syncOffset, double frameCycle); // Adjust the frequency of the display if needed
+		HRESULT ControlClock(double syncOffset, double frameCycle); // Adjust the frequency of the clock if needed
+		HRESULT UpdateStats(double syncOffset, double frameCycle); // Don't adjust anything, just update the syncOffset stats
 
 		BOOL powerstripTimingExists; // TRUE if display timing has been got through Powerstrip
 		BOOL liveSource; // TRUE if live source -> display sync is the only option
@@ -139,8 +139,11 @@ namespace DSObjects
 		UINT totalLines, totalColumns; // Including the porches and sync widths
 		UINT visibleLines, visibleColumns; // The nominal resolution
 		MovingAverage *syncOffsetFifo;
-		DOUBLE syncOffset, minSyncOffset, maxSyncOffset; // 
+		MovingAverage *frameCycleFifo;
+		DOUBLE minSyncOffset, maxSyncOffset;
 		DOUBLE syncOffsetAvg; // Average of the above
+		DOUBLE minFrameCycle, maxFrameCycle;
+		DOUBLE frameCycleAvg;
 
 		UINT pixelClock; // In pixels/s
 		DOUBLE displayFreqCruise;  // Nominal display frequency in frames/s
@@ -181,7 +184,7 @@ namespace DSObjects
 		HRESULT (__stdcall * m_pDirect3DCreate9Ex)(UINT SDKVersion, IDirect3D9Ex**);
 		HMODULE m_hD3D9;
 
-		CCritSec m_RenderLock;
+		CCritSec m_allocatorLock;
 		CComPtr<IDirectDraw> m_pDirectDraw;
 		CComPtr<IDirect3D9Ex> m_pD3DEx;
 		CComPtr<IDirect3D9> m_pD3D;
@@ -332,13 +335,10 @@ namespace DSObjects
 		bool m_bPendingResetDevice;
 
 		LONG m_lNextSampleWait; // Waiting time for next sample in EVR
-		LONG m_lShiftToNearest, m_lShiftToNearestPrev; // Correction to sample presentation time in sync to nearest
-		bool m_bVideoSlowerThanDisplay; // True if this fact is detected in sync to nearest
-		UINT m_uSyncGlitches; // Number of synchronization glithes since the last reset of stats, if using sync to nearest
 		bool m_bSnapToVSync; // True if framerate is low enough so that snap to vsync makes sense
 
 		UINT m_uScanLineEnteringPaint; // The active scan line when entering Paint()
-		REFERENCE_TIME m_rtEstVSyncTime; // Next vsync time in reference clock "coordinates"
+		REFERENCE_TIME m_llEstVBlankTime; // Next vblank start time in reference clock "coordinates"
 		HANDLE m_hEventGoth; //precise wait time control handle for sync to nearest in VMR9 
 
 		double m_fAvrFps; // Estimate the true FPS as given by the distance between vsyncs when a frame has been presented
@@ -363,13 +363,13 @@ namespace DSObjects
 		UINT m_uD3DRefreshRate; // As got when creating the d3d device
 		double m_dD3DRefreshCycle; // Display refresh cycle ms
 		double m_dEstRefreshCycle; // As estimated from scan lines
-		REFERENCE_TIME m_rtFrameCycle; // Time per frame of video in 100ns units. As extracted from video header or stream
-		double m_dFrameCycle; // Same as above but in ms units
+		double m_dFrameCycle; // Average sample time, extracted from the samples themselves
 		// double m_fps is defined in ISubPic.h
 		double m_dOptimumDisplayCycle; // The display cycle that is closest to the frame rate. A multiple of the actual display cycle
 		double m_dCycleDifference; // Difference in video and display cycle time relative to the video cycle time
 
 		UINT m_pcFramesDropped;
+		UINT m_pcFramesDuplicated;
 		UINT m_pcFramesDrawn;
 
 		LONGLONG m_pllJitter [NB_JITTER]; // Vertical sync time stats
@@ -384,9 +384,15 @@ namespace DSObjects
 		LONGLONG m_MinJitter;
 		LONGLONG m_MaxSyncOffset;
 		LONGLONG m_MinSyncOffset;
+		UINT m_uSyncGlitches;
 
 		LONGLONG m_llSampleTime, m_llLastSampleTime; // Present time for the current sample
-		LONGLONG m_llHysteresis; // If != 0 then a "snap to vsync" is active, see EVR
+		LONG m_lSampleLatency, m_lLastSampleLatency; // Time between intended and actual presentation time
+		LONG m_lMinSampleLatency, m_lLastMinSampleLatency;
+		LONGLONG m_llHysteresis;
+		LONG m_lHysteresis;
+		LONG m_lShiftToNearest, m_lShiftToNearestPrev;
+		bool m_bVideoSlowerThanDisplay;
 
 		int m_bInterlaced;
 		double m_TextScale;
@@ -472,6 +478,8 @@ namespace DSObjects
 	protected:
 		CComPtr<IVMRSurfaceAllocatorNotify9> m_pIVMRSurfAllocNotify;
 		CInterfaceArray<IDirect3DSurface9> m_pSurfaces;
+		CComPtr<IBaseFilter> pVMR9;
+		CComPtr<IPin> pPin;
 
 		HRESULT CreateDevice(CString &_Error);
 		void DeleteSurfaces();

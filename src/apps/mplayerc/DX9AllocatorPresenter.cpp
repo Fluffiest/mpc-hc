@@ -384,11 +384,10 @@ CDX9AllocatorPresenter::CDX9AllocatorPresenter(HWND hWnd, HRESULT& hr, bool bIsE
 	m_dD3DRefreshCycle(0),
 	m_dDetectedScanlineTime(0.0),
 	m_dEstRefreshCycle(0.0),
-	m_rtFrameCycle(0.0),
 	m_dFrameCycle(0.0),
 	m_dOptimumDisplayCycle(0.0),
 	m_dCycleDifference(1.0),
-	m_rtEstVSyncTime(0)
+	m_llEstVBlankTime(0)
 {
 	if(FAILED(hr)) 
 	{
@@ -489,6 +488,7 @@ void CDX9AllocatorPresenter::ResetStats()
 	m_MinSyncOffset = MAXLONG64;
 	m_MaxSyncOffset = MINLONG64;
 	m_uSyncGlitches = 0;
+	m_pcFramesDropped = 0;
 }
 
 bool CDX9AllocatorPresenter::SettingsNeedResetDevice()
@@ -672,7 +672,7 @@ HRESULT CDX9AllocatorPresenter::CreateDevice(CString &_Error)
 		pp.hDeviceWindow = m_hWnd;
 		pp.SwapEffect = D3DSWAPEFFECT_COPY;
 		pp.Flags = D3DPRESENTFLAG_VIDEO;
-		pp.BackBufferCount = 1; 
+		pp.BackBufferCount = 1;
 		pp.BackBufferWidth = d3ddm.Width;
 		pp.BackBufferHeight = d3ddm.Height;
 		m_BackbufferType = d3ddm.Format;
@@ -784,18 +784,8 @@ HRESULT CDX9AllocatorPresenter::CreateDevice(CString &_Error)
 		int CurrentSize = min(m_ScreenSize.cx, MinSize);
 		double Scale = double(CurrentSize) / double(MinSize);
 		m_TextScale = Scale;
-		m_pD3DXCreateFont(m_pD3DDev,
-							 -24.0*Scale,
-							 -11.0*Scale,
-							 CurrentSize < 800 ? FW_NORMAL : FW_BOLD,
-							 0,
-							 FALSE,
-							 DEFAULT_CHARSET,
-							 OUT_DEFAULT_PRECIS,
-							 ANTIALIASED_QUALITY,
-							 FIXED_PITCH | FF_DONTCARE,
-							 L"Lucida Console",
-							 &m_pFont);
+		m_pD3DXCreateFont(m_pD3DDev, -24.0*Scale, -11.0*Scale, CurrentSize < 800 ? FW_NORMAL : FW_BOLD, 0, FALSE,
+			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, FIXED_PITCH | FF_DONTCARE, L"Lucida Console", &m_pFont);
 	}
 	m_pSprite = NULL;
 	if (m_pD3DXCreateSprite) m_pD3DXCreateSprite( m_pD3DDev, &m_pSprite);
@@ -807,7 +797,7 @@ HRESULT CDX9AllocatorPresenter::CreateDevice(CString &_Error)
 HRESULT CDX9AllocatorPresenter::AllocSurfaces(D3DFORMAT Format)
 {
     CAutoLock cAutoLock(this);
-	CAutoLock cRenderLock(&m_RenderLock);
+	CAutoLock cRenderLock(&m_allocatorLock);
 
 	AppSettings& s = AfxGetAppSettings();
 
@@ -856,7 +846,7 @@ HRESULT CDX9AllocatorPresenter::AllocSurfaces(D3DFORMAT Format)
 void CDX9AllocatorPresenter::DeleteSurfaces()
 {
     CAutoLock cAutoLock(this);
-	CAutoLock cRenderLock(&m_RenderLock);
+	CAutoLock cRenderLock(&m_allocatorLock);
 
 	for(int i = 0; i < m_nDXSurface+2; i++)
 	{
@@ -1395,10 +1385,10 @@ void CDX9AllocatorPresenter::UpdateAlphaBitmap()
 
 	if ((m_VMR9AlphaBitmap.dwFlags & VMRBITMAP_DISABLE) == 0)
 	{
-		HBITMAP			hBitmap = (HBITMAP)GetCurrentObject (m_VMR9AlphaBitmap.hdc, OBJ_BITMAP);
+		HBITMAP hBitmap = (HBITMAP)GetCurrentObject (m_VMR9AlphaBitmap.hdc, OBJ_BITMAP);
 		if (!hBitmap)
 			return;
-		DIBSECTION		info = {0};
+		DIBSECTION info = {0};
 		if (!::GetObject(hBitmap, sizeof( DIBSECTION ), &info ))
 			return;
 
@@ -1416,20 +1406,24 @@ void CDX9AllocatorPresenter::UpdateAlphaBitmap()
 STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 {
 	AppSettings& s = AfxGetAppSettings();
-	D3DRASTER_STATUS rasterStatus;
-	REFERENCE_TIME rtSyncOffset = 0;
-	double msSyncOffset = 0.0;
-	REFERENCE_TIME rtCurRefTime = 0;
-	
 	CMPlayerCApp * pApp = AfxGetMyApp();
-	CAutoLock cRenderLock(&m_RenderLock);
+	D3DRASTER_STATUS rasterStatus;
+	REFERENCE_TIME llCurRefTime = 0;
+	REFERENCE_TIME llSyncOffset = 0;
+	double dSyncOffset = 0.0;
+	
+	CAutoLock cRenderLock(&m_allocatorLock);
 
+	// Estimate time for next vblank based on number of remaining lines in this frame. This algorithm seems to be
+	// accurate within one ms why there should not be any need for a more accurate one. The wiggly line seen
+	// when using sync to nearest and sync display is most likely due to inaccuracies in the audio-card-based
+	// reference clock. The wiggles are not seen with the perfcounter-based reference clock of the sync to video option.
 	m_pD3DDev->GetRasterStatus(0, &rasterStatus);	
 	m_uScanLineEnteringPaint = rasterStatus.ScanLine;
-	if (m_pRefClock) m_pRefClock->GetTime(&rtCurRefTime);
-	msSyncOffset = (m_ScreenSize.cy - m_uScanLineEnteringPaint) * m_dDetectedScanlineTime;
-	rtSyncOffset = REFERENCE_TIME(10000.0 * msSyncOffset);
-	m_rtEstVSyncTime = rtCurRefTime + rtSyncOffset;
+	if (m_pRefClock) m_pRefClock->GetTime(&llCurRefTime);
+	dSyncOffset = (m_ScreenSize.cy - m_uScanLineEnteringPaint) * m_dDetectedScanlineTime;
+	llSyncOffset = REFERENCE_TIME(10000.0 * dSyncOffset);
+	m_llEstVBlankTime = llCurRefTime + llSyncOffset; // Estimated time for the start of next vblank
 
 	if(m_WindowRect.right <= m_WindowRect.left || m_WindowRect.bottom <= m_WindowRect.top
 		|| m_NativeVideoSize.cx <= 0 || m_NativeVideoSize.cy <= 0
@@ -1640,15 +1634,28 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 	}
 
 	// Calculate timing statistics
-	if (m_pRefClock) m_pRefClock->GetTime(&rtCurRefTime); // To check if we called Present too late to hit the right vsync
-	m_rtEstVSyncTime = max(m_rtEstVSyncTime, rtCurRefTime); // Sometimes the real value is slips to be larger than the estimated value
-	SyncStats(m_rtEstVSyncTime); // Max of estimate and real. Sometimes Present may actually return immediately so we need the estimate as a lower bound
-	SyncOffsetStats(-rtSyncOffset); // Minus because we want time to flow downward in the graph in DrawStats
+	if (m_pRefClock) m_pRefClock->GetTime(&llCurRefTime); // To check if we called Present too late to hit the right vsync
+	m_llEstVBlankTime = max(m_llEstVBlankTime, llCurRefTime); // Sometimes the real value is larger than the estimated value (but never smaller)
+	if (pApp->m_fDisplayStats < 3) // Partial on-screen statistics
+		SyncStats(m_llEstVBlankTime); // Max of estimate and real. Sometimes Present may actually return immediately so we need the estimate as a lower bound
+	if (pApp->m_fDisplayStats == 1) // Full on-screen statistics
+		SyncOffsetStats(-llSyncOffset); // Minus because we want time to flow downward in the graph in DrawStats
 
 	// Adjust sync
-	if (s.m_RenderSettings.bSynchronizeVideo) m_pGenlock->ControlClock(msSyncOffset);
-	else if (s.m_RenderSettings.bSynchronizeDisplay) m_pGenlock->ControlDisplay(msSyncOffset);
-	else m_pGenlock->UpdateStats(msSyncOffset); // No sync or sync to nearest neighbor
+	double frameCycle = (double)((m_llSampleTime - m_llLastSampleTime) / 10000.0);
+	if (frameCycle < 0) frameCycle = 0.0; // Happens when searching.
+
+	if (s.m_RenderSettings.bSynchronizeVideo) m_pGenlock->ControlClock(dSyncOffset, frameCycle);
+	else if (s.m_RenderSettings.bSynchronizeDisplay) m_pGenlock->ControlDisplay(dSyncOffset, frameCycle);
+	else m_pGenlock->UpdateStats(dSyncOffset, frameCycle); // No sync or sync to nearest neighbor
+
+	m_dFrameCycle = m_pGenlock->frameCycleAvg;
+	if (m_dFrameCycle > 0.0) m_fps = 1000.0 / m_dFrameCycle;
+	m_dCycleDifference = GetCycleDifference();
+	if (abs(m_dCycleDifference) < 0.05) // If less than 5% speed difference
+		m_bSnapToVSync = true;
+	else
+		m_bSnapToVSync = false;
 
 	// Check how well audio is matching rate (if at all)
 	DWORD tmp;
@@ -1764,13 +1771,6 @@ void CDX9AllocatorPresenter::DrawStats()
 {
 	AppSettings& s = AfxGetAppSettings();
 	CMPlayerCApp * pApp = AfxGetMyApp();
-	int bDetailedStats = 2;
-	switch (pApp->m_fDisplayStats)
-	{
-	case 1: bDetailedStats = 2; break;
-	case 2: bDetailedStats = 1; break;
-	case 3: bDetailedStats = 0; break;
-	}	
 
 	LONGLONG llMaxJitter = m_MaxJitter;
 	LONGLONG llMinJitter = m_MinJitter;
@@ -1778,50 +1778,46 @@ void CDX9AllocatorPresenter::DrawStats()
 	LONGLONG llMinSyncOffset = m_MinSyncOffset;
 
 	RECT rc = {20, 20, 520, 520 };
+	// pApp->m_fDisplayStats = 1 for full stats, 2 for little less, 3 for basic, 0 for no stats
 	if (m_pFont && m_pSprite)
 	{
 		m_pSprite->Begin(D3DXSPRITE_ALPHABLEND);
 		CString	strText;
 		int TextHeight = 25.0*m_TextScale + 0.5;
 
-		strText.Format(L"Frames drawn from stream start: %d | Time from stream start: %.0f s", m_pcFramesDrawn, m_llSampleTime / 10000000.0);
+		strText.Format(L"Frames drawn from stream start: %d | Sample time stamp: %d ms", m_pcFramesDrawn, (LONG)(m_llSampleTime / 10000));
 		DrawText(rc, strText, 1);
 		OffsetRect(&rc, 0, TextHeight);
 
-		strText.Format(L"Frame cycle from video header: %.3f ms | Frame rate from video header: %.3f fps", m_dFrameCycle, m_fps);
-		DrawText(rc, strText, 1);
-		OffsetRect(&rc, 0, TextHeight);
-
-		strText.Format(L"Frame cycle from sample time stamps: %.3f ms", (m_llSampleTime - m_llLastSampleTime) / 10000.0);
-		DrawText(rc, strText, 1);
-		OffsetRect(&rc, 0, TextHeight);
-
-		strText.Format(L"Measured closest match display cycle: %.3f ms | Measured base display cycle: %.3f ms", m_dOptimumDisplayCycle, m_dEstRefreshCycle);
-		DrawText(rc, strText, 1);
-		OffsetRect(&rc, 0, TextHeight);
-
-		strText.Format(L"Display cycle - frame cycle mismatch: %.3f %%", 100 * m_dCycleDifference);
-		DrawText(rc, strText, 1);
-		OffsetRect(&rc, 0, TextHeight);
-
-		strText.Format(L"Actual frame cycle: %+5.3f ms [%+.3f ms, %+.3f ms] | Actual frame rate: %.3f fps", m_fJitterMean / 10000.0, (double(llMinJitter)/10000.0), (double(llMaxJitter)/10000.0), 10000000.0 / m_fJitterMean);
-		DrawText(rc, strText, 1);
-		OffsetRect(&rc, 0, TextHeight);
-
-		strText.Format(L"Display cycle from Windows: %.3f ms | Display refresh rate from Windows: %d Hz", m_dD3DRefreshCycle, m_uD3DRefreshRate);
-		DrawText(rc, strText, 1);
-		OffsetRect(&rc, 0, TextHeight);
-
-		if (m_pGenlock->powerstripTimingExists)
+		if (pApp->m_fDisplayStats == 1)
 		{
-			strText.Format(L"Display cycle from Powerstrip: %.3f ms | Display refresh rate from Powerstrip: %.3f Hz", 1000.0 / m_pGenlock->curDisplayFreq, m_pGenlock->curDisplayFreq);
+			strText.Format(L"Frame cycle: %.3f ms [%.3f ms, %.3f ms] | Frame rate: %.3f fps", m_dFrameCycle, m_pGenlock->minFrameCycle, m_pGenlock->maxFrameCycle, m_fps);
 			DrawText(rc, strText, 1);
 			OffsetRect(&rc, 0, TextHeight);
-		}
 
+			strText.Format(L"Measured closest match display cycle: %.3f ms | Measured base display cycle: %.3f ms", m_dOptimumDisplayCycle, m_dEstRefreshCycle);
+			DrawText(rc, strText, 1);
+			OffsetRect(&rc, 0, TextHeight);
 
-		if (bDetailedStats > 1)
-		{
+			strText.Format(L"Display cycle - frame cycle mismatch: %.3f %%", 100 * m_dCycleDifference);
+			DrawText(rc, strText, 1);
+			OffsetRect(&rc, 0, TextHeight);
+
+			strText.Format(L"Actual frame cycle: %+5.3f ms [%+.3f ms, %+.3f ms] | Actual frame rate: %.3f fps", m_fJitterMean / 10000.0, (double(llMinJitter)/10000.0), (double(llMaxJitter)/10000.0), 10000000.0 / m_fJitterMean);
+			DrawText(rc, strText, 1);
+			OffsetRect(&rc, 0, TextHeight);
+
+			strText.Format(L"Display cycle from Windows: %.3f ms | Display refresh rate from Windows: %d Hz", m_dD3DRefreshCycle, m_uD3DRefreshRate);
+			DrawText(rc, strText, 1);
+			OffsetRect(&rc, 0, TextHeight);
+
+			if (m_pGenlock->powerstripTimingExists)
+			{
+				strText.Format(L"Display cycle from Powerstrip: %.3f ms | Display refresh rate from Powerstrip: %.3f Hz", 1000.0 / m_pGenlock->curDisplayFreq, m_pGenlock->curDisplayFreq);
+				DrawText(rc, strText, 1);
+				OffsetRect(&rc, 0, TextHeight);
+			}
+
 			if ((m_caps.Caps & D3DCAPS_READ_SCANLINE) == 0)
 			{
 				strText.Format(L"Graphics device does not support scan line access. No sync is possible");
@@ -1854,37 +1850,44 @@ void CDX9AllocatorPresenter::DrawStats()
 			}
 		}
 
-		strText.Format(L"Average sync offset: %+5.1f ms [%.1f ms, %.1f ms]", m_fSyncOffsetAvr/10000.0, -m_pGenlock->maxSyncOffset, -m_pGenlock->minSyncOffset);
+		strText.Format(L"Average sync offset: %3.1f ms [%.1f ms, %.1f ms]", m_pGenlock->syncOffsetAvg, m_pGenlock->minSyncOffset, m_pGenlock->maxSyncOffset);
 		DrawText(rc, strText, 1);
 		OffsetRect(&rc, 0, TextHeight);
 
-		if ((bDetailedStats > 1) && m_pAudioStats && s.m_RenderSettings.bSynchronizeVideo)
+		if (pApp->m_fDisplayStats < 3)
 		{
-			strText.Format(L"Audio lag: %3d ms [%d ms, %d ms] | %s", m_lAudioLag, m_lAudioLagMin, m_lAudioLagMax, (m_lAudioSlaveMode == 4) ? _T("Audio renderer is matching rate (for analog sound output)") : _T("Audio renderer is not matching rate"));
+			strText.Format(L"# of sync glitches: %d", m_uSyncGlitches);
+			DrawText(rc, strText, 1);
+			OffsetRect(&rc, 0, TextHeight);
+
+			strText.Format(L"# of frames dropped: %d", m_pcFramesDropped);
 			DrawText(rc, strText, 1);
 			OffsetRect(&rc, 0, TextHeight);
 		}
 
-		if (m_bIsEVR)
+		if (pApp->m_fDisplayStats == 1)
 		{
-			strText.Format(L"Sample waiting time: %d ms", m_lNextSampleWait);
-			DrawText(rc, strText, 1);
-			OffsetRect(&rc, 0, TextHeight);
-			if (s.m_RenderSettings.bSynchronizeNearest)
+			if (m_pAudioStats && s.m_RenderSettings.bSynchronizeVideo)
 			{
-				strText.Format(L"Sample paint time correction: %2d ms %s | %d", m_lShiftToNearest, (m_llHysteresis == 0) ? L"| No snap to vsync" : L"| Snap to vsync", m_llHysteresis /10000);
+				strText.Format(L"Audio lag: %3d ms [%d ms, %d ms] | %s", m_lAudioLag, m_lAudioLagMin, m_lAudioLagMax, (m_lAudioSlaveMode == 4) ? _T("Audio renderer is matching rate (for analog sound output)") : _T("Audio renderer is not matching rate"));
 				DrawText(rc, strText, 1);
 				OffsetRect(&rc, 0, TextHeight);
-
 			}
-		}
 
-		strText.Format(L"# of sync glitches: %d", m_uSyncGlitches);
-		DrawText(rc, strText, 1);
-		OffsetRect(&rc, 0, TextHeight);
+			if (m_bIsEVR)
+			{
+				strText.Format(L"Sample waiting time: %d ms", m_lNextSampleWait);
+				DrawText(rc, strText, 1);
+				OffsetRect(&rc, 0, TextHeight);
+				if (s.m_RenderSettings.bSynchronizeNearest)
+				{
+					strText.Format(L"Sample paint time correction: %2d ms | Hysteresis: %d", m_lShiftToNearest, m_llHysteresis /10000);
+					DrawText(rc, strText, 1);
+					OffsetRect(&rc, 0, TextHeight);
 
-		if (bDetailedStats > 1)
-		{
+				}
+			}
+
 			strText.Format(L"Settings: ");
 
 			if (m_bIsEVR)
@@ -1929,7 +1932,7 @@ void CDX9AllocatorPresenter::DrawStats()
 				strText += "SyncNearest ";
 
 			if (s.m_RenderSettings.iVMR9VSyncOffset)
-				strText.AppendFormat(L"VSOfst(%d) ", s.m_RenderSettings.iVMR9VSyncOffset);
+				strText.AppendFormat(L"VSOffs(%3.1f) ", s.m_RenderSettings.fTargetSyncOffset);
 
 			if (m_bIsEVR)
 			{
@@ -1966,7 +1969,7 @@ void CDX9AllocatorPresenter::DrawStats()
 		m_pSprite->End();
 	}
 
-	if (m_pLine && bDetailedStats)
+	if (m_pLine && (pApp->m_fDisplayStats < 3))
 	{
 		D3DXVECTOR2	Points[NB_JITTER];
 		int nIndex;
@@ -2011,16 +2014,18 @@ void CDX9AllocatorPresenter::DrawStats()
 		}		
 		m_pLine->Draw(Points, NB_JITTER, D3DCOLOR_XRGB(255, 100, 100));
 
-		for (int i = 0; i < NB_JITTER; i++)
+		if (pApp->m_fDisplayStats == 1) // Full on-screen statistics
 		{
-			nIndex = (m_nNextSyncOffset + 1 + i) % NB_JITTER;
-			if (nIndex < 0)
-				nIndex += NB_JITTER;
-			Points[i].x  = (FLOAT)(StartX + (i * 5));
-			Points[i].y  = (FLOAT)(StartY + ((m_pllSyncOffset[nIndex]) / 2000 + 125));
-		}		
-		m_pLine->Draw(Points, NB_JITTER, D3DCOLOR_XRGB(100, 200, 100));
-
+			for (int i = 0; i < NB_JITTER; i++)
+			{
+				nIndex = (m_nNextSyncOffset + 1 + i) % NB_JITTER;
+				if (nIndex < 0)
+					nIndex += NB_JITTER;
+				Points[i].x  = (FLOAT)(StartX + (i * 5));
+				Points[i].y  = (FLOAT)(StartY + ((m_pllSyncOffset[nIndex]) / 2000 + 125));
+			}		
+			m_pLine->Draw(Points, NB_JITTER, D3DCOLOR_XRGB(100, 200, 100));
+		}
 		m_pLine->End();
 	}
 }
@@ -2127,7 +2132,7 @@ STDMETHODIMP CDX9AllocatorPresenter::SetPixelShader(LPCSTR pSrcData, LPCSTR pTar
 
 STDMETHODIMP CDX9AllocatorPresenter::SetPixelShader2(LPCSTR pSrcData, LPCSTR pTarget, bool bScreenSpace)
 {
-	CAutoLock cRenderLock(&m_RenderLock);
+	CAutoLock cRenderLock(&m_allocatorLock);
 
 	CAtlList<CExternalPixelShader> *pPixelShaders;
 	if (bScreenSpace)
@@ -2199,8 +2204,8 @@ HRESULT CVMR9AllocatorPresenter::CreateDevice(CString &_Error)
 
 void CVMR9AllocatorPresenter::DeleteSurfaces()
 {
-    CAutoLock cAutoLock(this);
-	CAutoLock cRenderLock(&m_RenderLock);
+    //CAutoLock cAutoLock(this);
+	CAutoLock cRenderLock(&m_allocatorLock);
 
 	m_pSurfaces.RemoveAll();
 	return __super::DeleteSurfaces();
@@ -2660,7 +2665,7 @@ STDMETHODIMP CVMR9AllocatorPresenter::GetSurface(DWORD_PTR dwUserID, DWORD Surfa
 	if(SurfaceIndex >= m_pSurfaces.GetCount()) 
         return E_FAIL;
 
-	CAutoLock cRenderLock(&m_RenderLock);
+	CAutoLock cRenderLock(&m_allocatorLock);
 
 	if (m_nVMR9Surfaces)
 	{
@@ -2679,8 +2684,8 @@ STDMETHODIMP CVMR9AllocatorPresenter::GetSurface(DWORD_PTR dwUserID, DWORD Surfa
 
 STDMETHODIMP CVMR9AllocatorPresenter::AdviseNotify(IVMRSurfaceAllocatorNotify9* lpIVMRSurfAllocNotify)
 {
-    CAutoLock cAutoLock(this);
-	CAutoLock cRenderLock(&m_RenderLock);
+    //CAutoLock cAutoLock(this);
+	CAutoLock cRenderLock(&m_allocatorLock);
 
 	m_pIVMRSurfAllocNotify = lpIVMRSurfAllocNotify;
 
@@ -2696,8 +2701,8 @@ STDMETHODIMP CVMR9AllocatorPresenter::AdviseNotify(IVMRSurfaceAllocatorNotify9* 
 
 STDMETHODIMP CVMR9AllocatorPresenter::StartPresenting(DWORD_PTR dwUserID)
 {
-    CAutoLock cAutoLock(this);
-	CAutoLock cRenderLock(&m_RenderLock);
+    //CAutoLock cAutoLock(this);
+	CAutoLock cRenderLock(&m_allocatorLock);
 
 	AppSettings& s = AfxGetAppSettings();
 	m_pcFramesDrawn = 0;
@@ -2706,10 +2711,10 @@ STDMETHODIMP CVMR9AllocatorPresenter::StartPresenting(DWORD_PTR dwUserID)
 		m_pGenlock->AdviseSyncClock(((CMainFrame*)(AfxGetApp()->m_pMainWnd))->m_pSyncClock);
 
 	{
-		CComPtr<IBaseFilter> pVMR9;
 		FILTER_INFO filterInfo;
 		ZeroMemory(&filterInfo, sizeof(filterInfo));
 		m_pIVMRSurfAllocNotify->QueryInterface (__uuidof(IBaseFilter), (void**)&pVMR9);
+		pVMR9->FindPin(L"VMR Input0", &pPin);
 		pVMR9->QueryFilterInfo(&filterInfo); // This addref's the pGraph member
 
 		BeginEnumFilters(filterInfo.pGraph, pEF, pBF)
@@ -2727,10 +2732,7 @@ STDMETHODIMP CVMR9AllocatorPresenter::StartPresenting(DWORD_PTR dwUserID)
 
 	ResetStats();
 	EstimateRefreshTimings();
-	if (m_rtFrameCycle > 0.0) m_dCycleDifference = GetCycleDifference(); // Might have moved to another display
-
-	//create precise wait time control handle for sync to nearest in VMR9 
-	m_hEventGoth = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (m_dFrameCycle > 0.0) m_dCycleDifference = GetCycleDifference(); // Might have moved to another display
 
 	return S_OK;
 }
@@ -2739,98 +2741,24 @@ STDMETHODIMP CVMR9AllocatorPresenter::StopPresenting(DWORD_PTR dwUserID)
 {
 	m_pGenlock->ResetTiming();
 	m_pRefClock = NULL;
-
-	if(m_hEventGoth)
-		CloseHandle(m_hEventGoth);
-
 	return S_OK;
 }
 
 STDMETHODIMP CVMR9AllocatorPresenter::PresentImage(DWORD_PTR dwUserID, VMR9PresentationInfo* lpPresInfo)
 {
 	CheckPointer(m_pIVMRSurfAllocNotify, E_UNEXPECTED);
-
 	m_dMainThreadId = GetCurrentThreadId();
+	// The surest way to get the correct frame cycle is to retrieve it from the samples themselves.
+	// Neither the samples' start and stop times nor the video info header always contains correct
+	// numbers. Some decoders such as the CyberLink SP/Video decoder (PDVD8) for instance always reports 0
+	// cycle time when decoding a DVD. We have to average over two samples as the sample periods aren't
+	// always constant.
 	m_llLastSampleTime = m_llSampleTime;
 	m_llSampleTime = lpPresInfo->rtStart;
-	if (m_rtFrameCycle == 0 || m_bNeedCheckSample)
-	{
-		m_bNeedCheckSample = false;
-		CComPtr<IBaseFilter> pVMR9;
-		CComPtr<IPin> pPin;
-		CMediaType mt;
-		
-		if (SUCCEEDED (m_pIVMRSurfAllocNotify->QueryInterface (__uuidof(IBaseFilter), (void**)&pVMR9)) &&
-			SUCCEEDED (pVMR9->FindPin(L"VMR Input0", &pPin)) &&
-			SUCCEEDED (pPin->ConnectionMediaType(&mt)) )
-		{
-			ExtractAvgTimePerFrame(&mt, m_rtFrameCycle);
-			m_dFrameCycle = m_rtFrameCycle / 10000.0;
-			if (m_rtFrameCycle > 0.0)
-			{
-				m_fps = 10000000.0 / m_rtFrameCycle;
-				m_dCycleDifference = GetCycleDifference();
 
-				//This is for synctonearest in VMR9
-				//by tomasen@gmail.com
-				if (abs(m_dCycleDifference) < 0.05) 
-					m_bSnapToVSync = true;
-				else
-					m_bSnapToVSync = false;
-			}
-			m_bInterlaced = ExtractInterlaced(&mt);
-
-			CSize NativeVideoSize = m_NativeVideoSize;
-			CSize AspectRatio = m_AspectRatio;
-			if (mt.formattype==FORMAT_VideoInfo || mt.formattype==FORMAT_MPEGVideo)
-			{
-				VIDEOINFOHEADER *vh = (VIDEOINFOHEADER*)mt.pbFormat;
-
-				NativeVideoSize = CSize(vh->bmiHeader.biWidth, abs(vh->bmiHeader.biHeight));
-				if (vh->rcTarget.right - vh->rcTarget.left > 0)
-					NativeVideoSize.cx = vh->rcTarget.right - vh->rcTarget.left;
-				else if (vh->rcSource.right - vh->rcSource.left > 0)
-					NativeVideoSize.cx = vh->rcSource.right - vh->rcSource.left;
-
-				if (vh->rcTarget.bottom - vh->rcTarget.top > 0)
-					NativeVideoSize.cy = vh->rcTarget.bottom - vh->rcTarget.top;
-				else if (vh->rcSource.bottom - vh->rcSource.top > 0)
-					NativeVideoSize.cy = vh->rcSource.bottom - vh->rcSource.top;
-			}
-			else if (mt.formattype==FORMAT_VideoInfo2 || mt.formattype==FORMAT_MPEG2Video)
-			{
-				VIDEOINFOHEADER2 *vh = (VIDEOINFOHEADER2*)mt.pbFormat;
-
-				if (vh->dwPictAspectRatioX && vh->dwPictAspectRatioY)
-					AspectRatio = CSize(vh->dwPictAspectRatioX, vh->dwPictAspectRatioY);
-
-				NativeVideoSize = CSize(vh->bmiHeader.biWidth, abs(vh->bmiHeader.biHeight));
-				if (vh->rcTarget.right - vh->rcTarget.left > 0)
-					NativeVideoSize.cx = vh->rcTarget.right - vh->rcTarget.left;
-				else if (vh->rcSource.right - vh->rcSource.left > 0)
-					NativeVideoSize.cx = vh->rcSource.right - vh->rcSource.left;
-
-				if (vh->rcTarget.bottom - vh->rcTarget.top > 0)
-					NativeVideoSize.cy = vh->rcTarget.bottom - vh->rcTarget.top;
-				else if (vh->rcSource.bottom - vh->rcSource.top > 0)
-					NativeVideoSize.cy = vh->rcSource.bottom - vh->rcSource.top;
-			}
-			if (m_NativeVideoSize != NativeVideoSize || m_AspectRatio != AspectRatio)
-			{
-				m_NativeVideoSize = NativeVideoSize;
-				m_AspectRatio = AspectRatio;
-				AfxGetApp()->m_pMainWnd->PostMessage(WM_REARRANGERENDERLESS);
-			}
-		}
-	}
-
-    HRESULT hr;
-
-	if(!lpPresInfo || !lpPresInfo->lpSurf)
-		return E_POINTER;
-
-	CAutoLock cAutoLock(this);
-	CAutoLock cRenderLock(&m_RenderLock);
+	if(!lpPresInfo || !lpPresInfo->lpSurf) return E_POINTER;
+	HRESULT hr;
+	CAutoLock cRenderLock(&m_allocatorLock);
 
 	CComPtr<IDirect3DTexture9> pTexture;
 	lpPresInfo->lpSurf->GetContainer(IID_IDirect3DTexture9, (void**)&pTexture);
@@ -2838,8 +2766,7 @@ STDMETHODIMP CVMR9AllocatorPresenter::PresentImage(DWORD_PTR dwUserID, VMR9Prese
 	if(pTexture)
 	{
 		m_pVideoSurface[m_nCurSurface] = lpPresInfo->lpSurf;
-		if(m_pVideoTexture[m_nCurSurface]) 
-			m_pVideoTexture[m_nCurSurface] = pTexture;
+		if(m_pVideoTexture[m_nCurSurface]) m_pVideoTexture[m_nCurSurface] = pTexture;
 	}
 	else
 	{
@@ -2884,90 +2811,6 @@ STDMETHODIMP CVMR9AllocatorPresenter::PresentImage(DWORD_PTR dwUserID, VMR9Prese
 
 		m_nTearingPos = (m_nTearingPos + 7) % m_NativeVideoSize.cx;
 	}
-
-	//Sync To Nearest For VMR9
-	AppSettings& s = AfxGetAppSettings();
-	while(s.m_RenderSettings.bSynchronizeNearest ){
-		double targetSyncOffset;
-		m_pGenlock->GetTargetSyncOffset(&targetSyncOffset); // Target sync offset from settings
-		if (m_rtFrameCycle > 0.0){ 
-			if(targetSyncOffset*15000 > m_rtFrameCycle){
-				targetSyncOffset = (double)m_rtFrameCycle /15000;
-				m_pGenlock->SetTargetSyncOffset(targetSyncOffset);
-				//I think we should disable bSynchronizeNearest for this video if 
-				//targetSyncOffset is greater than 2/3 of m_rtFrameCycle -- by Tomasen
-				break;
-			}
-		}else if(targetSyncOffset*20000 >(lpPresInfo->rtEnd - lpPresInfo->rtStart)){
-				//There is high chance we should disable bSynchronizeNearest for this video 
-				//if targetSyncOffset is greater than 1/2 of next frame duration -- by Tomasen
-				break;
-		}
-
-		//Basically same as EVR version, but since we should present image immediately (in theory),
-		//We just wait whith in one display cycle. Feedbacks and discuss are wellcome.
-		//Also, following code might need clean up -- tomasen@gmail.com
-		REFERENCE_TIME rtCurRefTime;
-		if (m_pRefClock) m_pRefClock->GetTime(&rtCurRefTime);
-		LONGLONG llRefClockTime = lpPresInfo->rtStart - min( (GetDisplayCycle() * 10000) , (lpPresInfo->rtEnd - lpPresInfo->rtStart)) ;
-
-		m_lNextSampleWait = (LONG)((m_llSampleTime - llRefClockTime) / 10000); // Time left until sample is due, in ms
-		if (m_lNextSampleWait < 0)
-			m_lNextSampleWait = 0; // We came too late. Race through, discard the sample and get a new one
-		else if (s.m_RenderSettings.bSynchronizeNearest ) // Present at the closest "safe" occasion at tergetSyncOffset ms before vsync to avoid tearing
-		{
-			REFERENCE_TIME rtRefClockTimeNow; if (m_pRefClock) m_pRefClock->GetTime(&rtRefClockTimeNow); // Reference clock time now
-			LONG lLastVsyncTime = (LONG)((m_rtEstVSyncTime - rtRefClockTimeNow) / 10000); // Time of previous vsync relative to now
-
-			LONGLONG llNextSampleWait = (LONGLONG)(((double)lLastVsyncTime + GetDisplayCycle() - targetSyncOffset) * 10000); // Next safe time to Paint()
-			LONGLONG llEachStep = (GetDisplayCycle() * 10000); // While the proposed time is in the past of sample presentation time
-			if(llEachStep){
-				LONGLONG llHowManyStepWeNeed = ((m_llSampleTime + m_llHysteresis) - (llRefClockTime + llNextSampleWait)) / llEachStep;   // Try the next possible time, one display cycle ahead
-				llNextSampleWait += llEachStep * llHowManyStepWeNeed;
-			}else
-				llNextSampleWait = 10000;
-			m_lNextSampleWait = (LONG)(llNextSampleWait / 10000);
-			m_lShiftToNearestPrev = m_lShiftToNearest;
-			m_lShiftToNearest = (LONG)((llRefClockTime + llNextSampleWait - m_llSampleTime) / 10000); // The adjustment made to get to the sweet point in time, in ms
-
-			if (abs(GetCycleDifference()) < 0.05)
-			{
-				LONG lDisplayCycle2 = (LONG)(GetDisplayCycle() / 2.0); // These are a couple of empirically determined constants used the control the "snap" function
-				LONG lDisplayCycle3 = (LONG)(GetDisplayCycle() / 3.0);
-				if (m_bSnapToVSync) // If a step down in the m_lShiftToNearest function. Display slower than video. 
-				{
-					m_bVideoSlowerThanDisplay = false;
-					m_llHysteresis = -(LONGLONG)(10000 * lDisplayCycle3);
-				}
-				else if ((m_lShiftToNearest - m_lShiftToNearestPrev) > lDisplayCycle2) // If a step up
-				{
-					m_bVideoSlowerThanDisplay = true;
-					m_llHysteresis = (LONGLONG)(10000 * lDisplayCycle3);
-				}
-				else if ((m_lShiftToNearest < (2 * lDisplayCycle3)) && (m_lShiftToNearest > lDisplayCycle3))
-					m_llHysteresis = 0; // Reset when between 1/3 and 2/3 of the way either way
-			}
-		}
-		if(m_lNextSampleWait*10000 > (lpPresInfo->rtEnd - lpPresInfo->rtStart)){
-			//m_pcFramesDropped++;
-			//Might should just drop this frame
-			//Currently frame dropping seems to be handled by VMR9 itself
-			
-		}else{
-			//Every thing is good here
-		}
-			
-		if (m_lNextSampleWait <= 0)
-			m_lNextSampleWait = 0;
-		else{
-			//this should be more precise than Sleep() ? Tomasen
-			if(m_hEventGoth)
-				WaitForSingleObject(m_hEventGoth, m_lNextSampleWait);
-		}
-
-		break;
-	}
-	//end of Sync To Nearest For VMR9
 
 	Paint(true);
 	m_pcFramesDrawn++;
@@ -3032,8 +2875,8 @@ STDMETHODIMP CRM9AllocatorPresenter::NonDelegatingQueryInterface(REFIID riid, vo
 
 HRESULT CRM9AllocatorPresenter::AllocSurfaces()
 {
-    CAutoLock cAutoLock(this);
-	CAutoLock cRenderLock(&m_RenderLock);
+    //CAutoLock cAutoLock(this);
+	CAutoLock cRenderLock(&m_allocatorLock);
 
 	m_pVideoSurfaceOff = NULL;
 	m_pVideoSurfaceYUY2 = NULL;
@@ -3062,8 +2905,8 @@ HRESULT CRM9AllocatorPresenter::AllocSurfaces()
 
 void CRM9AllocatorPresenter::DeleteSurfaces()
 {
-    CAutoLock cAutoLock(this);
-	CAutoLock cRenderLock(&m_RenderLock);
+    //CAutoLock cAutoLock(this);
+	CAutoLock cRenderLock(&m_allocatorLock);
 	m_pVideoSurfaceOff = NULL;
 	m_pVideoSurfaceYUY2 = NULL;
 	__super::DeleteSurfaces();
@@ -3203,8 +3046,8 @@ STDMETHODIMP CRM9AllocatorPresenter::Blt(UCHAR* pImageData, RMABitmapInfoHeader*
 
 STDMETHODIMP CRM9AllocatorPresenter::BeginOptimizedBlt(RMABitmapInfoHeader* pBitmapInfo)
 {
-    CAutoLock cAutoLock(this);
-	CAutoLock cRenderLock(&m_RenderLock);
+    //CAutoLock cAutoLock(this);
+	CAutoLock cRenderLock(&m_allocatorLock);
 	DeleteSurfaces();
 	m_NativeVideoSize = m_AspectRatio = CSize(pBitmapInfo->biWidth, abs(pBitmapInfo->biHeight));
 	if(FAILED(AllocSurfaces())) return E_FAIL;
@@ -3273,8 +3116,8 @@ void CQT9AllocatorPresenter::DeleteSurfaces()
 
 STDMETHODIMP CQT9AllocatorPresenter::BeginBlt(const BITMAP& bm)
 {
-    CAutoLock cAutoLock(this);
-	CAutoLock cRenderLock(&m_RenderLock);
+    //CAutoLock cAutoLock(this);
+	CAutoLock cRenderLock(&m_allocatorLock);
 	DeleteSurfaces();
 	m_NativeVideoSize = m_AspectRatio = CSize(bm.bmWidth, abs(bm.bmHeight));
 	if(FAILED(AllocSurfaces())) return E_FAIL;
@@ -3726,6 +3569,7 @@ CGenlock::CGenlock(DOUBLE target, DOUBLE limit, INT lineD, INT colD, DOUBLE cloc
 	liveSource = FALSE;
 	powerstripTimingExists = FALSE;
 	syncOffsetFifo = new MovingAverage(64);
+	frameCycleFifo = new MovingAverage(4);
 }
 
 CGenlock::~CGenlock()
@@ -3735,6 +3579,11 @@ CGenlock::~CGenlock()
 	{
 		delete syncOffsetFifo;
 		syncOffsetFifo = NULL;
+	}
+	if(frameCycleFifo != NULL)
+	{
+		delete frameCycleFifo;
+		frameCycleFifo = NULL;
 	}
 	syncClock = NULL;
 };
@@ -3923,21 +3772,31 @@ HRESULT CGenlock::ResetStats()
 	CAutoLock lock(&csGenlockLock);
 	minSyncOffset = 1000000.0;
 	maxSyncOffset = -1000000.0;
+	minFrameCycle = 1000000.0;
+	maxFrameCycle = -1000000.0;
 	displayAdjustmentsMade = 0;
 	clockAdjustmentsMade = 0;
 	return S_OK;
 }
 
 // Synchronize by adjusting display refresh rate
-HRESULT CGenlock::ControlDisplay(double syncOffset)
+HRESULT CGenlock::ControlDisplay(double syncOffset, double frameCycle)
 {
 	LPARAM lParam = NULL; 
 	WPARAM wParam = monitor; 
 	ATOM setTiming;
 
+	AppSettings& s = AfxGetAppSettings();
+	targetSyncOffset = s.m_RenderSettings.fTargetSyncOffset;
+	lowSyncOffset = targetSyncOffset - s.m_RenderSettings.fControlLimit;
+	highSyncOffset = targetSyncOffset + s.m_RenderSettings.fControlLimit;
+
 	syncOffsetAvg = syncOffsetFifo->Average(syncOffset);
 	minSyncOffset = min(minSyncOffset, syncOffset);
 	maxSyncOffset = max(maxSyncOffset, syncOffset);
+	frameCycleAvg = frameCycleFifo->Average(frameCycle);
+	minFrameCycle = min(minFrameCycle, frameCycle);
+	maxFrameCycle = max(maxFrameCycle, frameCycle);
 
 	if (!PowerstripRunning() || !powerstripTimingExists) return E_FAIL;
 	// Adjust as seldom as possible by checking the current controlState before changing it.
@@ -3992,11 +3851,19 @@ HRESULT CGenlock::ControlDisplay(double syncOffset)
 
 // Synchronize by adjusting reference clock rate (and therefore video FPS).
 // Todo: check so that we don't have a live source
-HRESULT CGenlock::ControlClock(double syncOffset)
+HRESULT CGenlock::ControlClock(double syncOffset, double frameCycle)
 {
+	AppSettings& s = AfxGetAppSettings();
+	targetSyncOffset = s.m_RenderSettings.fTargetSyncOffset;
+	lowSyncOffset = targetSyncOffset - s.m_RenderSettings.fControlLimit;
+	highSyncOffset = targetSyncOffset + s.m_RenderSettings.fControlLimit;
+
 	syncOffsetAvg = syncOffsetFifo->Average(syncOffset);
 	minSyncOffset = min(minSyncOffset, syncOffset);
 	maxSyncOffset = max(maxSyncOffset, syncOffset);
+	frameCycleAvg = frameCycleFifo->Average(frameCycle);
+	minFrameCycle = min(minFrameCycle, frameCycle);
+	maxFrameCycle = max(maxFrameCycle, frameCycle);
 
 	if (!syncClock) return E_FAIL;
 	// Adjust as seldom as possible by checking the current controlState before changing it.
@@ -4034,10 +3901,13 @@ HRESULT CGenlock::ControlClock(double syncOffset)
 }
 
 // Don't adjust anything, just update the syncOffset stats
-HRESULT CGenlock::UpdateStats(double syncOffset)
+HRESULT CGenlock::UpdateStats(double syncOffset, double frameCycle)
 {
 	syncOffsetAvg = syncOffsetFifo->Average(syncOffset);
 	minSyncOffset = min(minSyncOffset, syncOffset);
 	maxSyncOffset = max(maxSyncOffset, syncOffset);
+	frameCycleAvg = frameCycleFifo->Average(frameCycle);
+	minFrameCycle = min(minFrameCycle, frameCycle);
+	maxFrameCycle = max(maxFrameCycle, frameCycle);
 	return S_OK;
 }
