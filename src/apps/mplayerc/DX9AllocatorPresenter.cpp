@@ -1495,8 +1495,6 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 					hr = m_pD3DDev->SetPixelShader(Shader.m_pPixelShader);
 					TextureCopy(m_pVideoTexture[src]);
 
-					//if(++src > 2) src = 1;
-					//if(++dst > 2) dst = 1;
 					src		= dst;
 					if(++dst >= m_nDXSurface+2) dst = m_nDXSurface;
 				}
@@ -1542,7 +1540,6 @@ STDMETHODIMP_(bool) CDX9AllocatorPresenter::Paint(bool fAll)
 
 			if(rSrcVid.Size() != rDstVid.Size())
 			{
-				//					if((iDX9Resizer == 0 || iDX9Resizer == 1 || rSrcVid.Size() == rDstVid.Size() || FAILED(hr)))
 				if(iDX9Resizer == 0 || iDX9Resizer == 1)
 				{
 					D3DTEXTUREFILTERTYPE Filter = iDX9Resizer == 0 ? D3DTEXF_POINT : D3DTEXF_LINEAR;
