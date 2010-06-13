@@ -65,15 +65,13 @@ End Sub
 ''
 ' ...
 Function GetLanguages()
-  Dim oLanguages, oFile, ext, name
+  Dim oLanguages, oFile
   
   Set oLanguages = CreateObject("Scripting.Dictionary")
   
-  For Each oFile In oFSO.GetFolder(".").Files 'For all subfolders in the current folder...
-    ext = oFSO.GetExtensionName(oFile)
-    name = oFSO.GetBaseName(oFile)
-    If (ext = "po") Then
-      oLanguages.Add name, oFile.Name
+  For Each oFile In oFSO.GetFolder(".").Files 'For all files in the current folder...
+    If (LCase(oFSO.GetExtensionName(oFile.Name)) = "po") Then 'If a PO file...
+      oLanguages.Add oFSO.GetBaseName(oFile.Name), oFile.Path
     End If
   Next
   Set GetLanguages = oLanguages

@@ -6,7 +6,9 @@ _POPUP_
 <PlaceHolder>
 0
 0.00
+1252
 %
+\000
 ...
 IDS_SAVEVSS_FMT
 MS Shell Dlg
