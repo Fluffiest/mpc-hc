@@ -43,13 +43,13 @@ Sub Main
   If (oFSO.FileExists("English.pot") = True) Then 'If the master POT file exists...
 	Set oOriginalTranslations = GetTranslationsFromRcFile("../mplayerc.rc")
 
-	'~ Set oLanguageTranslations = GetTranslationsFromRcFile("mplayerc.ru.rc")
+	'~ Set oLanguageTranslations = GetTranslationsFromRcFile("German\MergeGerman.rc")
 	'~ Set oMergedTranslations = MergeTranslations(oOriginalTranslations, oLanguageTranslations)
-	'~ CreatePoFileWithTranslations "English.pot", "mplayerc.ru.po", oMergedTranslations
+	'~ CreatePoFileWithTranslations "English.pot", "German\German.po", oMergedTranslations
 
-	'~ Set oLanguageTranslations = GetTranslationsFromRcFile("mplayerc.sc.rc")
+	'~ Set oLanguageTranslations = GetTranslationsFromRcFile("ChineseSimplified\MergeChineseSimplified.rc")
 	'~ Set oMergedTranslations = MergeTranslations(oOriginalTranslations, oLanguageTranslations)
-	'~ CreatePoFileWithTranslations "English.pot", "mplayerc.sc.po", oMergedTranslations
+	'~ CreatePoFileWithTranslations "English.pot", "ChineseSimplified\ChineseSimplified.po", oMergedTranslations
 
 	Set oLanguages = GetLanguages
 	For Each sLanguage In oLanguages.Keys 'For all languages...
@@ -78,7 +78,7 @@ Function GetLanguages()
   Set oLanguages = CreateObject("Scripting.Dictionary")
 
   For Each oFile In oFSO.GetFolder(".").Files 'For all subfolders in the current folder...
-    ext = LCase(oFSO.GetExtensionName(oFile))
+    ext = oFSO.GetExtensionName(oFile)
     name = oFSO.GetBaseName(oFile)
     If (ext = "rc") Then
       oLanguages.Add name, oFile.Name
