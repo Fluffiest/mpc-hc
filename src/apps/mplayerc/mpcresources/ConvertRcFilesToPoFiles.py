@@ -196,11 +196,25 @@ def MergeTranslations(oOriginalTranslations, oLanguageTranslations):
     oMergedTranslations["__CODEPAGE__"] = oLanguageTranslations["__CODEPAGE__"]
     return oMergedTranslations
 
-def CreatePoFileWithTranslations(sMasterPotPath, sLanguagePoPath, oTranslations):
-    #Dim oMasterPotFile, sMasterLine
-    #Dim oLanguagePoFile, sLanguageLine
-    #Dim oMatch, sMsgId, sMsgStr, sKey
 
+def GetPoRevisionDate():
+    oNow = datetime.now()
+    sYear = str(oNow.year)
+    sMonth = str(oNow.month)
+    if oNow.month < 10:
+        sMonth = "0" + sMonth
+    sDay = str(oNow.day)
+    if oNow.day < 10:
+        sDay = "0" + sDay
+    sHour = str(oNow.hour)
+    if oNow.hour < 10:
+        sHour = "0" + sHour
+    sMinute = str(oNow.minute)
+    if oNow.minute < 10:
+        sMinute = "0" + sMinute    
+    return sYear + "-" + sMonth + "-" + sDay + " " + sHour + ":" + sMinute + "+0000"
+
+def CreatePoFileWithTranslations(sMasterPotPath, sLanguagePoPath, oTranslations):
     if not os.path.exists(sMasterPotPath): #if the master POT file exists...
         return
     
@@ -211,34 +225,30 @@ def CreatePoFileWithTranslations(sMasterPotPath, sLanguagePoPath, oTranslations)
     for line in oMasterPotFile: #For all lines...
         sMasterLine = line
         sLanguageLine = sMasterLine
-
         if sMasterLine.strip() != "": #if NOT empty line...
             n, oMatch = FoundRegExpIndex(sMasterLine,
                 ["msgid \"(.*)\"", "msgstr \"\"",
-                 "CP1252", "English"])
+                 "CP1252", "English", 
+                 "PO-Revision-Date"])
             if n == 0: #if "msgid"...
                 sMsgId = oMatch[0]
                 if sMsgId in oTranslations: #if translation located...
-                    sMsgStr = oTranslations[sMsgId]
-                
+                    sMsgStr = oTranslations[sMsgId]                
             elif n == 1: #if "msgstr"...
                 if (sMsgId == "1252") and (sMsgStr == ""): #if same codepage...
-                    sMsgStr = oTranslations["__CODEPAGE__"]
-                
+                    sMsgStr = oTranslations["__CODEPAGE__"]                
                 if (sMsgStr != ""): #if translated...
-                    sLanguageLine = sMasterLine.replace("msgstr \"\"", "msgstr \"" + sMsgStr + "\"")
-                
+                    sLanguageLine = sMasterLine.replace("msgstr \"\"", "msgstr \"" + sMsgStr + "\"")                
             elif n == 2: #if "Codepage"...
                 sLanguageLine = sMasterLine.replace("CP1252", "CP" + oTranslations["__CODEPAGE__"])
             elif n == 3: #if "English"...
                 sLanguageLine = sMasterLine.replace("English", os.path.splitext(sLanguagePoPath)[0])
-            
+            elif n == 4: #if "PO-Revision-Date"...
+                sLanguageLine = "\"PO-Revision-Date: " + GetPoRevisionDate() + "\\n\"\n"
         else: #if empty line
             sMsgId = ""
             sMsgStr = ""            
-
         oLanguagePoFile.write(sLanguageLine)
-    
     oMasterPotFile.close()
     oLanguagePoFile.close()
 

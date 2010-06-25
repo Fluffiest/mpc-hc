@@ -4,6 +4,7 @@ _HDR_POPUP_
 _ITEM_POPUP_
 _POPUP_
 <PlaceHolder>
+1252
 0
 0.00
 %

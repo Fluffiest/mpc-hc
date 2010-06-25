@@ -11,7 +11,6 @@ $Id: CreateMasterPotFile.vbs 2065 2010-06-20 16:42:14Z kinddragon $
 '''
 
 import os, codecs, re
-#import win32file
 
 from datetime import datetime
 from collections import OrderedDict
@@ -35,8 +34,8 @@ class CString:
     Context = None
     Id = ""
     Str = ""
+    cFormat = False
 
-#
 def GetStringsFromRcFile(sRcFilePath):    
     oBlacklist = GetStringBlacklist("StringBlacklist.txt")
     
@@ -129,6 +128,10 @@ def GetStringsFromRcFile(sRcFilePath):
                     oString = CString()
                 else:
                     oString = oStrings[sKey]
+                if iBlockType == STRINGTABLE_BLOCK:
+                    pos = sString.find("%")
+                    if pos != -1 and pos < len(sString) - 1:
+                        oString.cFormat = True 
                 if len(sComment) > 0:
                     oString.Comment = sComment
                 if len(oString.References) > 0:
@@ -199,7 +202,8 @@ def CreateMasterPotFile(sPotPath, oStrings, sCodePage):
         aReferences = oString.References
         for ref in aReferences: #For all references...
             oPotFile.write("#: " + ref + "\n")
-        oPotFile.write("#, c-format\n")
+        if (oString.cFormat):
+            oPotFile.write("#, c-format\n")
         if len(oString.Context) > 0: #If context exists...
             oPotFile.write("msgctxt \"" + oString.Context + "\"\n")
         oPotFile.write("msgid \"" + oString.Id + "\"\n")
@@ -222,7 +226,7 @@ def FoundRegExpIndex(sString, exprs, flags = re.IGNORECASE):
     i = 0  
     for expr in exprs:
         oMatch = FoundRegExpMatch(sString, expr, flags)
-        if oMatch:
+        if oMatch != None:
             return i, oMatch
         i = i + 1
     return -1, None

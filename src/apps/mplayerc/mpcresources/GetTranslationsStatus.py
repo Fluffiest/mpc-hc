@@ -7,12 +7,12 @@
 # ID line follows -- this is updated by SVN
 # $Id: GetTranslationsStatus.vbs 2065 2010-06-20 16:42:14Z kinddragon $
 
-import os, codecs, re, operator
+import os, codecs, re
 
 from datetime import datetime
 from collections import OrderedDict
 
-SvnWebUrlLanguages = "http://winmerge.svn.sourceforge.net/viewvc/winmerge/trunk/Translations/WinMerge/"
+SvnWebUrlLanguages = "http://sourceforge.net/apps/trac/mpc-hc/browser/trunk/src/apps/mplayerc/mpcresources/"
 
 def GetLanguages():
     oLanguages = OrderedDict()
@@ -248,6 +248,20 @@ def CreateTranslationsStatusWikiFile(sWikiPath, sortedKeys, oTranslationsStatus)
     oWikiFile.write("|}\n")
     oWikiFile.close()
 
+def CreateTranslationsStatusTracFile(sWikiPath, sortedKeys, oTranslationsStatus):
+    oWikiFile = open(sWikiPath, "w")
+    
+    oWikiFile.write("== Translations Status ==\n")
+    oWikiFile.write("Status from #''" + GetCreationDate() + "''':\n")
+    oWikiFile.write("||Language||Total||Translated||Fuzzy||Untranslated||Last Update\n")
+    for sLanguage in sortedKeys: #For all languages...
+        if (sLanguage != "English"): #if NOT English...
+            oLanguageStatus = oTranslationsStatus[sLanguage]
+            oWikiFile.write("||" + sLanguage + "||" + str(oLanguageStatus.Count) + "||" + str(oLanguageStatus.Translated) + "||" + str(oLanguageStatus.Fuzzy) + "||" + str(oLanguageStatus.Untranslated) + "||" + oLanguageStatus.PoRevisionDate[:10] + "||\n")
+    oLanguageStatus = oTranslationsStatus["English"]
+    oWikiFile.write("||English||" + str(oLanguageStatus.Count) + "||" + str(oLanguageStatus.Count) + "||0||0||" + oLanguageStatus.PotCreationDate[:10] + "||\n")
+    oWikiFile.close()
+
 def CreateTranslationsStatusXmlFile(sXmlPath, sortedKeys, oTranslationsStatus):
     oXmlFile = open(sXmlPath, "w")
 
@@ -413,6 +427,7 @@ if __name__ == '__main__':
     
     CreateTranslationsStatusHtmlFile("TranslationsStatus.html", sortedKeys, oTranslationsStatus)
     CreateTranslationsStatusWikiFile("TranslationsStatus.wiki", sortedKeys, oTranslationsStatus)
+    CreateTranslationsStatusTracFile("TranslationsStatus.trac", sortedKeys, oTranslationsStatus)
     CreateTranslationsStatusXmlFile("TranslationsStatus.xml", sortedKeys, oTranslationsStatus)
     CreateTranslatorsListFile("Translators.html", sortedKeys, oTranslationsStatus)
 
