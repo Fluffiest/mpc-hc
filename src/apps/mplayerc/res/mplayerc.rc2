@@ -33,6 +33,41 @@
 LANGUAGE LANG_NEUTRAL, SUBLANG_SYS_DEFAULT
 #endif //_WIN32
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDB_ONOFF               BITMAP                  "res\\onoff.bmp"
+IDB_PLAYERTOOLBAR       BITMAP                  "res\\toolbar1.bmp"
+IDB_MONO                BITMAP                  "res\\mono.bmp"
+IDB_STEREO              BITMAP                  "res\\stereo.bmp"
+IDB_NOAUDIO             BITMAP                  "res\\noaudio.bmp"
+IDB_STREAMTYPES         BITMAP                  "res\\streamtypes.bmp"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDR_MAINFRAME           ICON                    "res\\icon.ico"
+IDI_SINGLE              ICON                    "res\\single.ico"
+IDI_MULTI               ICON                    "res\\multi.ico"
+IDI_AUDIOCD             ICON                    "res\\Icon_41.ico"
+IDI_DVD                 ICON                    "res\\Icon_114.ico"
+IDI_UNKNOWN             ICON                    "res\\Icon_116.ico"
+IDR_TB_PLAY             ICON                    "res\\tb_play_16.ico"
+IDR_TB_PAUSE            ICON                    "res\\tb_pause_16.ico"
+IDR_TB_STOP             ICON                    "res\\tb_stop_16.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AVI
+//
+
+IDR_AVI_FILECOPY        AVI                     "res\\ani.avi"
 
 /////////////////////////////////////////////////////////////////////////////
 //

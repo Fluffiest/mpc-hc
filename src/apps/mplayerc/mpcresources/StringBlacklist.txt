@@ -12,12 +12,13 @@ _POPUP_
 ...
 IDS_SAVEVSS_FMT
 MS Shell Dlg
+MS Sans Serif
 msctls_updown32
 msctls_trackbar32
 Static
 Version 1.0
 SysLink
 MPC-HC
+Media Player Classic Home Cinema
 Media Player Classic - Home Cinema
-<a>http://mpc-hc.sourceforge.net/</a>
-VIDEO_TS
+Media Player Classic

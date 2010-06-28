@@ -27,16 +27,39 @@ PATH_MERGELANG_RC = "MplayercLang.rc"
 
 def GetLanguages():
     oLanguages = OrderedDict()
+    LanguageNames = {   
+            "by" : "Belarusian",
+            "ca" : "Catalan",
+            "sc" : "ChineseSimplified",
+            "tc" : "ChineseTraditional",
+            "cz" : "Czech",
+            "nl" : "Dutch",
+            "fr" : "French",
+            "de" : "German",
+            "hu" : "Hungarian",
+            "it" : "Italian",
+            "ja" : "Japanese",
+            "kr" : "Korean",
+            "pl" : "Polish",
+            "br" : "Portuguese",
+            "ru" : "Russian",
+            "sk" : "Slovak",
+            "es" : "Spanish",
+            "sv" : "Swedish",
+            "tr" : "Turkish",
+            "ua" : "Ukrainian" }
 
     for oFile in os.listdir("."): #For all subfolders in the current folder...
         ext = os.path.splitext(oFile)[1].lower()
-        name = os.path.splitext(oFile)[0]
         if ext == ".rc" and oFile != PATH_MERGELANG_RC:
+            name = os.path.splitext(oFile)[0]
+            name = os.path.splitext(name)[1][1:].lower()
+            name = LanguageNames[name]
             oLanguages[name] = oFile
 
     return oLanguages
 
-def GetTranslationsFromRcFile(sRcPath):
+def GetTranslationsFromRcFile(sRcPath, oAutoTranslate = None):
     sLang = ""
     sSubLang = ""
     sCodePage = ""
@@ -83,7 +106,7 @@ def GetTranslationsFromRcFile(sRcPath):
                         sCodePage = oMatch[0]
                 elif iBlockType == MENU_BLOCK:
                     n, oMatch = FoundRegExpIndex(sLine,
-                        ["POPUP \"(.*)\"", "MENUITEM.*\"(.*)\".*(ID_.*)"])
+                        ["POPUP \"(.*)\"", "MENUITEM.*\"(.*)\"\s*,\s*(ID_.*|\d+)"])
                     if n == 0: #POPUP...
                         if oMatch[0].find("_POPUP_") == -1:
                             sKey2 = str(iPosition)
@@ -169,6 +192,10 @@ def GetTranslationsFromRcFile(sRcPath):
                         iNum = iNum + 1
                         newKey = key + str(iNum)                  
                     oTranslations[newKey] = sValue
+                
+                if oAutoTranslate:
+                    if (len(sValue) == 1) or ((sValue not in oAutoTranslate) and (len(sValue) < 10) and (sValue == sValue.swapcase())):
+                        oAutoTranslate.add(sValue)
 
         oTextFile.close()
 
@@ -177,7 +204,7 @@ def GetTranslationsFromRcFile(sRcPath):
     
     return oTranslations
 
-def MergeTranslations(oOriginalTranslations, oLanguageTranslations):
+def MergeTranslations(oOriginalTranslations, oLanguageTranslations, oAutoTranslate):
     #Dim oMergedTranslations, sKey
     #Dim sOriginalTranslation, sLanguageTranslation
 
@@ -189,9 +216,12 @@ def MergeTranslations(oOriginalTranslations, oLanguageTranslations):
         else:
             sLanguageTranslation = ""
 
-        if (sOriginalTranslation != "") and (sOriginalTranslation != sLanguageTranslation):
-            if sOriginalTranslation not in oMergedTranslations:
+        if (sOriginalTranslation != "") and (sOriginalTranslation not in oMergedTranslations):
+            if sOriginalTranslation != sLanguageTranslation:
                 oMergedTranslations[sOriginalTranslation] = sLanguageTranslation
+            elif sOriginalTranslation in oAutoTranslate:
+                oMergedTranslations[sOriginalTranslation] = sOriginalTranslation
+                
 
     oMergedTranslations["__CODEPAGE__"] = oLanguageTranslations["__CODEPAGE__"]
     return oMergedTranslations
@@ -271,6 +301,20 @@ def FoundRegExpIndex(sString, exprs, flags = re.IGNORECASE):
         i = i + 1
     return -1, None
 
+def GetStringAutoTranslate(sTxtFilePath):  
+    oAutoTranslate = set()
+    
+    if os.path.exists(sTxtFilePath): #If the blacklist file exists...
+        oTxtFile = open(sTxtFilePath, "r")
+        for line in oTxtFile: #For all lines...
+            sLine = line.strip()
+          
+            if len(sLine) > 0:
+                if sLine not in oAutoTranslate: #If the key is NOT already used...
+                    oAutoTranslate.add(sLine)
+        oTxtFile.close
+    return oAutoTranslate
+
 if __name__ == '__main__':
     StartTime = datetime.now()
 
@@ -278,7 +322,8 @@ if __name__ == '__main__':
     print("Warning: " + scriptName + " can take several minutes to finish!")
 
     if os.path.exists(PATH_ENGLISH_POT): #if the master POT file exists...
-        oOriginalTranslations = GetTranslationsFromRcFile(PATH_MERGE_RC)
+        oAutoTranslate = GetStringAutoTranslate("StringAutoTranslate.txt")
+        oOriginalTranslations = GetTranslationsFromRcFile(PATH_MERGE_RC, oAutoTranslate)
 
         #oLanguageTranslations = GetTranslationsFromRcFile("mplayerc.ru.rc")
         #oMergedTranslations = MergeTranslations(oOriginalTranslations, oLanguageTranslations)
@@ -295,7 +340,7 @@ if __name__ == '__main__':
         for sLanguage in oLanguages.keys(): #For all languages...
             print(sLanguage)            
             oLanguageTranslations = GetTranslationsFromRcFile(oLanguages[sLanguage])
-            oMergedTranslations = MergeTranslations(oOriginalTranslations, oLanguageTranslations)
+            oMergedTranslations = MergeTranslations(oOriginalTranslations, oLanguageTranslations, oAutoTranslate)
             if (len(oMergedTranslations) > 0): #if translations exists...
                 CreatePoFileWithTranslations(PATH_ENGLISH_POT, sLanguage + ".po", oMergedTranslations)
 

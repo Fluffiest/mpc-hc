@@ -1,0 +1,25 @@
+OK
+VIDEO_TS
+<a>http://mpc-hc.sourceforge.net/</a>
+WinLIRC:
+uICE:
+DVD
+http://
+RealMedia
+QuickTime
+DirectShow
+EVR
+madVR
+EVR Sync **
+DirectX 7 **
+DirectX 9 **
+MediaInfo
+Xvid
+libmpeg2 MMX
+- ShockWave: n/a\n
+&50%\tAlt+1
+&100%\tAlt+2
+&200%\tAlt+3
+Andrew S. Gildehaus, agildehaus@runbox.com
+Marcel Hoffs, marcelhoffs@hotmail.com
+Steven W. Smith, smith78@sbcglobal.net
